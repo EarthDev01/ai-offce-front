@@ -1,0 +1,44 @@
+/* Tailwind v4 — ไม่ import "tailwindcss" ตรงๆ เพราะจะได้ preflight ติดมาด้วย
+   ant-design-vue/dist/reset.css รีเซ็ตให้อยู่แล้ว ถ้าซ้อน preflight ทับ ปุ่ม/หัวข้อ/ตารางของ antd จะเพี้ยน */
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'ant-design-vue/dist/reset.css' layer(base);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* design token ชุดเดียวกับ widget (ai-office-backend/widget/src/styles.ts)
+   static = ให้ Tailwind ปล่อยตัวแปรออกมาทุกตัว ไม่ตัดทิ้งตอน build แม้ยังไม่มีใครใช้ */
+@theme static {
+  --color-ink: #13282b;
+  --color-muted: #778785;
+  --color-line: #ccd5d2;
+  --color-accent: #0f6e63;
+  --color-accent-soft: #d6e7e3;
+  --color-ground: #edefee;
+  --color-surface: #fafbfa;
+
+  --font-sans: 'IBM Plex Sans Thai', system-ui, sans-serif;
+  --font-head: 'Anuphan', 'IBM Plex Sans Thai', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+/* ชื่อเดิมที่ <style scoped> ในคอมโพเนนต์อ้างอยู่ — ชี้กลับมาที่ token เดียวกัน จะได้ไม่มีสองแหล่ง
+   (--font-head / --font-mono ชื่อตรงกับ @theme อยู่แล้ว ไม่ต้อง alias) */
+:root {
+  --ink: var(--color-ink);
+  --muted: var(--color-muted);
+  --line: var(--color-line);
+  --accent: var(--color-accent);
+  --accent-soft: var(--color-accent-soft);
+  --ground: var(--color-ground);
+  --surface: var(--color-surface);
+  --font: var(--font-sans);
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--font); }
+  h1, h2, h3 { font-family: var(--font-head); margin: 0; }
+}
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
