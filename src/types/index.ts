@@ -24,7 +24,6 @@ export interface Office {
   label: string
   public_key: string
   allowed_origins: string[]
-  backoffice_api_url: string
   enabled: boolean
   is_hidden: boolean
   theme: ThemeMode
@@ -36,7 +35,7 @@ export interface Office {
 }
 
 export type OfficePatch = Partial<
-  Pick<Office, 'label' | 'allowed_origins' | 'backoffice_api_url' | 'enabled' | 'is_hidden' | 'theme' | 'placement'>
+  Pick<Office, 'label' | 'allowed_origins' | 'enabled' | 'is_hidden' | 'theme' | 'placement'>
 >
 
 export type ServicePatch = Partial<

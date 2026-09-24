@@ -30,8 +30,8 @@ function onMenuClick({ key }: { key: string }) {
   else if (key === 'logout') doLogout()
 }
 
-function doLogout() {
-  auth.logout()
+async function doLogout() {
+  await auth.signOut()
   router.push('/login')
 }
 
@@ -64,6 +64,7 @@ onMounted(() => {
         <RouterLink to="/offices">Offices</RouterLink>
         <RouterLink v-if="auth.can('user.manage')" to="/users">ผู้ใช้คอนโซล</RouterLink>
         <RouterLink v-if="auth.can('user.manage')" to="/roles">สิทธิ์ของ role</RouterLink>
+        <RouterLink v-if="auth.can('audit.view')" to="/activity">ประวัติการทำงาน</RouterLink>
         <div class="soon-group">
           <span class="soon-head">เร็วๆ นี้</span>
           <span class="soon">ภาพรวม</span>
@@ -91,7 +92,7 @@ onMounted(() => {
           </template>
         </a-dropdown>
       </header>
-      <main><div class="container"><RouterView /></div></main>
+      <main><div class="page-wrap"><RouterView /></div></main>
     </div>
 
     <ChangePasswordModal v-model:open="changePasswordOpen" />
@@ -132,7 +133,9 @@ header {
   position: fixed; top: 0; left: 240px; right: 0; height: 62px; z-index: 90; box-sizing: border-box;
 }
 main { padding: 28px 24px; }
-.container { max-width: 1180px; margin: 0 auto; }
+/* เต็มความกว้างจอทุกหน้า
+   ห้ามตั้งชื่อ class ว่า "container" — ชนกับ utility ของ Tailwind ที่ใส่ max-width ตาม breakpoint ให้เอง */
+.page-wrap { width: 100%; min-width: 0; }
 
 .user-menu { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--ink); padding: 5px 8px; border-radius: var(--r-control); transition: background .12s; }
 .user-menu:hover { background: var(--ground); }

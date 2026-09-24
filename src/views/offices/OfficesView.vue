@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import {
-  listOffices, createOffice, patchOffice, deleteOffice, rotateKey,
+  listOffices, createOffice, patchOffice, deleteOffice,
   addService, patchService, removeService,
 } from '@/services/api/offices'
 import { API_BASE } from '@/services/api/client'
@@ -30,11 +30,8 @@ const serviceForm = reactive({ id: '', label: '' })
 const office = computed(() => offices.value.find((o) => o.id === officeId.value) ?? null)
 const service = computed(() => office.value?.services.find((s) => s.id === serviceId.value) ?? null)
 
-const snippet = computed(() =>
-  office.value
-    ? `<script src="${API_BASE}/widget/v1/${office.value.public_key}/ai-office.js" defer><\/script>`
-    : '',
-)
+// snippet ชุดเดียวใช้ได้กับทุก office / ทุกโดเมน — หลังบ้าน ai แยกลูกค้าจากโดเมนที่เรียกเข้ามาเอง
+const snippet = `<script src="${API_BASE}/widget/v1/ai-office.js" defer><\/script>`
 
 async function reload(keepService = true) {
   loadError.value = ''
@@ -64,14 +61,16 @@ function apply(updated: Office) {
   else offices.value.push(updated)
 }
 
-async function run(fn: () => Promise<Office | null>, okMsg: string) {
+async function run(fn: () => Promise<Office | null>, okMsg: string): Promise<boolean> {
   saving.value = true
   try {
     const updated = await fn()
     if (updated) apply(updated)
     message.success(okMsg)
+    return true
   } catch (e) {
     message.error((e as Error).message)
+    return false
   } finally {
     saving.value = false
   }
@@ -101,10 +100,10 @@ async function submitNewOffice() {
   }
 }
 
-function saveOffice() {
+async function saveOffice() {
   const o = office.value
   if (!o) return
-  run(
+  const ok = await run(
     () =>
       patchOffice(o.id, {
         label: o.label,
@@ -112,19 +111,22 @@ function saveOffice() {
         is_hidden: o.is_hidden,
         theme: o.theme,
         placement: o.placement,
-        backoffice_api_url: o.backoffice_api_url,
         allowed_origins: originsText.value.split('\n').map((s) => s.trim()).filter(Boolean),
       }),
     'บันทึก office แล้ว',
   )
+  // server เก็บโดเมนในรูปแบบมาตรฐาน (ตัวพิมพ์เล็ก ไม่มี / ท้าย ตัดตัวซ้ำ) — โชว์ค่าที่เก็บจริง
+  // ถ้าบันทึกไม่ผ่าน (เช่นโดเมนซ้ำกับ office อื่น) คงข้อความที่พิมพ์ไว้ให้แก้ต่อ
+  if (ok) syncForm()
 }
 
 function confirmDeleteOffice() {
   const o = office.value
   if (!o) return
   Modal.confirm({
+    centered: true,
     title: `ลบ office "${o.label}" ?`,
-    content: `snippet ที่แปะอยู่ในเว็บของเขาจะหยุดทำงานทันที และ service ทั้ง ${o.services.length} ตัวจะถูกลบไปด้วย`,
+    content: `widget บนโดเมนของ officeลูกค้า เจ้านี้จะหยุดทำงานทันที และ service ทั้ง ${o.services.length} ตัวจะถูกลบไปด้วย`,
     okText: 'ลบ',
     okType: 'danger',
     cancelText: 'ยกเลิก',
@@ -133,22 +135,6 @@ function confirmDeleteOffice() {
       offices.value = offices.value.filter((x) => x.id !== o.id)
       officeId.value = offices.value[0]?.id ?? ''
       message.success('ลบแล้ว')
-    },
-  })
-}
-
-function confirmRotate() {
-  const o = office.value
-  if (!o) return
-  Modal.confirm({
-    title: 'เปลี่ยน public key ?',
-    content: 'snippet เดิมที่แปะอยู่จะใช้ไม่ได้ทันที ต้องส่ง snippet ใหม่ให้ลูกค้าไปเปลี่ยน',
-    okText: 'เปลี่ยน key',
-    okType: 'danger',
-    cancelText: 'ยกเลิก',
-    async onOk() {
-      apply(await rotateKey(o.id))
-      message.success('เปลี่ยน key แล้ว — อย่าลืมส่ง snippet ใหม่ให้ลูกค้า')
     },
   })
 }
@@ -201,6 +187,7 @@ function confirmDeleteService() {
   const s = service.value
   if (!o || !s) return
   Modal.confirm({
+    centered: true,
     title: `ลบ service "${s.label}" ?`,
     content: 'แอดมินที่กำลังดู service นี้จะไม่เห็นปุ่ม AI อีก · snippet ของ office ไม่ต้องแก้',
     okText: 'ลบ',
@@ -216,7 +203,7 @@ function confirmDeleteService() {
 
 function copySnippet() {
   navigator.clipboard
-    ?.writeText(snippet.value)
+    ?.writeText(snippet)
     .then(() => message.success('คัดลอกแล้ว'))
     .catch(() => message.error('คัดลอกไม่ได้ — เลือกข้อความแล้วกด copy เอง'))
 }
@@ -228,8 +215,8 @@ onMounted(() => reload(false))
   <div class="page-head">
     <h1>Offices</h1>
     <p class="sub">
-      แต่ละ office คือหลังบ้าน 1 ชุด (snippet 1 ชิ้นที่เอาไปแปะในเว็บลูกค้า)
-      เพิ่ม service ไว้ข้างในได้หลายแบรนด์ และสลับดูได้โดยไม่ต้องแก้ snippet
+      แต่ละ office คือ officeลูกค้า 1 เจ้า — ระบุตัวด้วย<strong>โดเมน</strong>ที่เขาใช้
+      ข้างในมีได้หลาย service (แบรนด์) และแชทแยกตาม service
     </p>
   </div>
 
@@ -266,15 +253,15 @@ onMounted(() => reload(false))
       </a-card>
 
       <template v-if="office">
-        <a-card size="small" class="tidy" title="Snippet ที่ให้ลูกค้าแปะ" style="margin-bottom: 16px">
+        <a-card size="small" class="tidy" title="Snippet สำหรับ officeลูกค้า" style="margin-bottom: 16px">
           <pre class="snippet">{{ snippet }}</pre>
           <div class="row" style="margin-top: 12px">
             <a-button size="small" type="primary" @click="copySnippet">คัดลอก snippet</a-button>
-            <a-button size="small" danger :disabled="!auth.can('office.rotate')" @click="confirmRotate">เปลี่ยน key</a-button>
           </div>
           <div class="hint">
-            key ไม่ใช่ความลับ — มันบอกแค่ว่าหน้านี้เป็นของ office ไหน
-            ด่านจริงคือ <strong>โดเมนที่อนุญาต</strong> ด้านล่าง
+            <strong>ชุดเดียวใช้ได้ทุก office</strong> — แปะครั้งเดียวในโค้ดของ officeลูกค้า (เช่น <code>index.html</code> ของ office-v10x)
+            แล้ว deploy ไปกี่โดเมนก็ได้ · หลังบ้าน ai ดูจากโดเมนที่เปิดอยู่ว่าเป็น office ไหน
+            จึงต้องใส่ <strong>โดเมนที่อนุญาต</strong> ด้านล่างให้ครบ
           </div>
         </a-card>
 
@@ -282,18 +269,12 @@ onMounted(() => reload(false))
           <label>ชื่อที่แสดง</label>
           <a-input v-model:value="office.label" />
 
-          <label>โดเมนที่อนุญาต (บรรทัดละ 1 origin)</label>
-          <a-textarea v-model:value="originsText" :rows="3" placeholder="http://localhost:5174" />
+          <label>โดเมนที่อนุญาต (บรรทัดละ 1 โดเมน)</label>
+          <a-textarea v-model:value="originsText" :rows="3" placeholder="https://demo-apex-dev-office.uppicture.online" />
           <div class="hint">
-            ต้องเป็น scheme + host เท่านั้น ห้ามมี path · key ที่หลุดออกไปใช้จากโดเมนอื่นไม่ได้
-            <br />เพิ่มตรงนี้แล้ว CORS เปิดให้ทันทีโดยไม่ต้อง deploy
-          </div>
-
-          <label>URL ของ API หลังบ้านเดิม</label>
-          <a-input v-model:value="office.backoffice_api_url" placeholder="https://api.k11s.local" />
-          <div class="hint">
-            ใช้ตรวจตัวตนของแอดมิน (<code>GET /api/employees-byid</code>) และจะใช้ต่อ tool ใน Phase 3
-            <br>เว้นว่างไว้ = office นี้จะรับได้แค่ token ปลอม <code>dev:...</code> ตอน <code>APP_MODE=dev</code>
+            <strong>ใช้ระบุว่าเป็น officeลูกค้า เจ้าไหน</strong> — widget ที่เปิดจากโดเมนเหล่านี้จะได้การตั้งค่าของ office นี้
+            <br />ใส่แค่ <code>https://โดเมน</code> ห้ามมี path · 1 โดเมนอยู่ได้แค่ office เดียว ·
+            <code>www.</code> กับไม่มี <code>www.</code> นับเป็นคนละโดเมน
           </div>
 
           <a-divider style="margin: 14px 0" />
@@ -306,7 +287,7 @@ onMounted(() => reload(false))
             <a-switch v-model:checked="office.is_hidden" />
             <span class="sw">ซ่อนปุ่มลอย</span>
           </div>
-          <div class="hint">widget ยังโหลดแต่ไม่มีปุ่ม — ให้ office เรียกเองด้วย <code>window.__aiOffice.open()</code></div>
+          <div class="hint">widget ยังโหลดแต่ไม่มีปุ่ม — ให้ officeลูกค้า เรียกเองด้วย <code>window.__aiOffice.open()</code></div>
 
           <label>ธีม</label>
           <a-radio-group v-model:value="office.theme" button-style="solid">
@@ -326,7 +307,7 @@ onMounted(() => reload(false))
           <label>ระยะจากขอบล่าง — {{ office.placement.offset_y }} px</label>
           <a-slider v-model:value="office.placement.offset_y" :min="0" :max="200" />
           <div class="hint">
-            อยู่ระดับ office เพราะเป็นหลังบ้านชุดเดียวกัน — ถ้าให้ต่างกันรายแบรนด์ ปุ่มจะเด้งไปมาตอนสลับ service
+            อยู่ระดับ office เพราะทุก service เปิดในหน้า officeลูกค้า เดียวกัน — ถ้าให้ต่างกันรายแบรนด์ ปุ่มจะเด้งไปมาตอนสลับ service
           </div>
 
           <div class="row" style="margin-top: 14px">
@@ -373,7 +354,7 @@ onMounted(() => reload(false))
             <span class="sw">เปิดใช้งาน service นี้</span>
 
             <div class="hint">
-              ใครก็ตามที่ล็อกอินหลังบ้านสำเร็จ + มีสิทธิ์ใน service นี้ จะเห็นปุ่ม AI ได้เลย
+              แอดมินที่ล็อกอิน officeลูกค้า สำเร็จ + มีสิทธิ์ service นี้ (<code>list_service</code> ใน token) จะเห็นปุ่ม AI ได้เลย
               — ไม่ต้องกำหนดรายชื่อ
             </div>
 
@@ -386,12 +367,12 @@ onMounted(() => reload(false))
       </template>
     </div>
 
-    <!-- :key = public_key → พอ rotate key หรือสลับ office ตัว preview re-mount โหลด script ใหม่เอง ไม่ต้อง refresh -->
-    <WidgetPreview v-if="office" :key="office.public_key" :office="office" :service="service" />
+    <!-- :key = office.id → สลับ office แล้ว preview re-mount ใหม่เอง ไม่ต้อง refresh -->
+    <WidgetPreview v-if="office" :key="office.id" :office="office" :service="service" />
   </div>
 
   <!-- สร้าง office -->
-  <a-modal
+  <a-modal centered
     v-model:open="newOfficeOpen"
     title="เพิ่ม office"
     :width="440"
@@ -401,11 +382,11 @@ onMounted(() => reload(false))
     :ok-button-props="{ disabled: !officeForm.id.trim() }"
     @ok="submitNewOffice"
   >
-    <p class="modal-intro">office คือหลังบ้าน 1 ชุด — snippet 1 ชิ้นที่เอาไปแปะในเว็บลูกค้า</p>
+    <p class="modal-intro">office คือ officeลูกค้า 1 เจ้า — สร้างแล้วใส่โดเมนของเขาใน "โดเมนที่อนุญาต" ต่อ</p>
     <div class="field">
       <label>รหัส office</label>
       <a-input v-model:value="officeForm.id" placeholder="เช่น acme" @keyup.enter="submitNewOffice" />
-      <span class="fhint">ตัวอักษร ตัวเลข - _ · ใช้อ้างอิงภายใน เปลี่ยนภายหลังไม่ได้</span>
+      <span class="fhint">ตัวอักษร ตัวเลข - _ · ใช้อ้างอิงใน officeai และข้อมูลแชท ลูกค้าไม่เห็น — ตั้งให้จำง่าย เปลี่ยนภายหลังไม่ได้</span>
     </div>
     <div class="field">
       <label>ชื่อที่แสดง <span class="opt">— ไม่บังคับ</span></label>
@@ -415,7 +396,7 @@ onMounted(() => reload(false))
   </a-modal>
 
   <!-- เพิ่ม service -->
-  <a-modal
+  <a-modal centered
     v-model:open="newServiceOpen"
     title="เพิ่ม service"
     :width="440"
@@ -429,7 +410,7 @@ onMounted(() => reload(false))
     <div class="field">
       <label>รหัส service</label>
       <a-input v-model:value="serviceForm.id" placeholder="เช่น K11S" @keyup.enter="submitNewService" />
-      <span class="fhint">ต้องตรงกับ web-service ที่หลังบ้านส่งมาตอนแอดมินเปิดเว็บนั้น</span>
+      <span class="fhint">ต้องตรงกับ <code>localStorage["web-service"]</code> ของ officeลูกค้า ตอนแอดมินเลือกเว็บนั้น</span>
     </div>
     <div class="field">
       <label>ชื่อที่แสดง <span class="opt">— ไม่บังคับ</span></label>

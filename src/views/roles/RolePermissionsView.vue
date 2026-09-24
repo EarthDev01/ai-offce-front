@@ -236,7 +236,7 @@ onMounted(reload)
   </a-card>
 
   <!-- เพิ่ม role -->
-  <a-modal
+  <a-modal centered
     v-model:open="addOpen"
     title="เพิ่ม role"
     ok-text="เพิ่ม"
@@ -254,7 +254,7 @@ onMounted(reload)
   </a-modal>
 
   <!-- แก้ชื่อ role -->
-  <a-modal
+  <a-modal centered
     v-model:open="renameOpen"
     title="แก้ไขชื่อ role"
     ok-text="บันทึก"

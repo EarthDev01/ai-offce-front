@@ -18,6 +18,7 @@ const LoginView = () => import('@/views/auth/LoginView.vue')
 const SetupView = () => import('@/views/auth/SetupView.vue')
 const UsersView = () => import('@/views/users/UsersView.vue')
 const RolePermissionsView = () => import('@/views/roles/RolePermissionsView.vue')
+const AuditLogView = () => import('@/views/audit/AuditLogView.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -41,6 +42,12 @@ const router = createRouter({
           name: 'roles',
           component: RolePermissionsView,
           meta: { requiresConsoleAuth: true, perm: 'user.manage' },
+        },
+        {
+          path: 'activity',
+          name: 'activity',
+          component: AuditLogView,
+          meta: { requiresConsoleAuth: true, perm: 'audit.view' },
         },
         // overview / history / review / quota — Phase 5
       ],

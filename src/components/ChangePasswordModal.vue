@@ -61,7 +61,7 @@ function cancel() {
 </script>
 
 <template>
-  <a-modal
+  <a-modal centered
     v-model:open="open"
     title="เปลี่ยนรหัสผ่าน"
     :confirm-loading="loading"

@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { getConsoleToken, setConsoleToken } from '@/services/api/client'
-import { changePassword as apiChangePassword, login, me, register, verifyTotp } from '@/services/api/auth'
+import {
+  changePassword as apiChangePassword,
+  login,
+  logout as apiLogout,
+  me,
+  register,
+  verifyTotp,
+} from '@/services/api/auth'
 import type { ConsoleUser, PermissionKey } from '@/services/api/types'
 
 interface PendingLogin {
@@ -70,6 +77,18 @@ export const useAuthStore = defineStore('auth', () => {
     pending.value = null
   }
 
+  /** ผู้ใช้กดออกเอง — บอก server ให้บันทึกประวัติก่อน (พลาดก็ออกต่อได้) แล้วค่อยล้าง state */
+  async function signOut() {
+    if (token.value) {
+      try {
+        await apiLogout()
+      } catch {
+        /* backend ล่ม/token หมดอายุ — ไม่ขวางการออกจากระบบ */
+      }
+    }
+    logout()
+  }
+
   async function changePassword(oldPassword: string, newPassword: string) {
     await apiChangePassword({ old_password: oldPassword, new_password: newPassword })
   }
@@ -89,6 +108,7 @@ export const useAuthStore = defineStore('auth', () => {
     submitTotp,
     loadMe,
     logout,
+    signOut,
     changePassword,
   }
 })

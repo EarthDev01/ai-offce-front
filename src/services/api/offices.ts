@@ -17,7 +17,6 @@ export const patchOffice = (id: string, patch: OfficePatch) =>
 export const deleteOffice = (id: string) => request<null>(`${base}/${enc(id)}`, { method: 'DELETE' })
 
 /** ทำให้ snippet เดิมใช้ไม่ได้ทันที — ต้องถามยืนยันก่อนเรียก */
-export const rotateKey = (id: string) => request<Office>(`${base}/${enc(id)}/rotate-key`, { method: 'POST' })
 
 export const addService = (officeID: string, id: string, label: string) =>
   request<Office>(`${base}/${enc(officeID)}/services`, { method: 'POST', body: JSON.stringify({ id, label }) })
