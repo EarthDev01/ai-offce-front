@@ -4,7 +4,6 @@ import { message, Modal } from 'ant-design-vue'
 import {
   listOffices, createOffice, patchOffice, deleteOffice,
   addService, patchService, removeService, listConnectors,
-  issueSecret, rotateSecret, commitSecret, revokeSecret,
 } from '@/services/api/offices'
 import { API_BASE } from '@/services/api/client'
 import WidgetPreview from '@/components/WidgetPreview.vue'
@@ -49,12 +48,6 @@ const allowAllWarning = computed(() => !!(service.value && service.value.enabled
 // เพดานต่อเดือนของ service ที่กำลังดู — ใช้ text ref เพราะ a-input-number คุย 0/ว่างคนละความหมายกับ ≤0
 const monthlyLimitText = ref('')
 watch(service, (s) => { monthlyLimitText.value = s && s.quota.monthly_limit > 0 ? String(s.quota.monthly_limit) : '' })
-
-const snippet = computed(() => {
-  if (!office.value) return ''
-  const extra = hostApiBase.value.trim() ? ` data-host-api-base="${hostApiBase.value.trim()}"` : ''
-  return `<script src="${API_BASE}/widget/v1/${office.value.public_key}/ai-office.js"${extra} defer><\/script>`
-})
 
 // snippet ไม่มี key — ใช้ได้ทุกโดเมน (หลังบ้านหา office จากโดเมนที่เรียกเข้ามา · โดเมนต้องลงทะเบียนไว้ office เดียว)
 const snippetAuto = computed(() => {
@@ -217,99 +210,6 @@ function saveService() {
   )
 }
 
-// ---------- secret_key (R3) ----------
-const secretModalOpen = ref(false)
-const secretModalValue = ref('')
-const secretLoading = ref(false)
-
-async function doIssueOrRotate(kind: 'issue' | 'rotate') {
-  const o = office.value
-  const s = service.value
-  if (!o || !s) return
-  secretLoading.value = true
-  try {
-    const res = kind === 'issue' ? await issueSecret(o.id, s.id) : await rotateSecret(o.id, s.id)
-    apply(res.office)
-    secretModalValue.value = res.secret_key
-    secretModalOpen.value = true
-  } catch (e) {
-    message.error(apiErrorText(e))
-  } finally {
-    secretLoading.value = false
-  }
-}
-
-function confirmIssueSecret() {
-  doIssueOrRotate('issue')
-}
-
-function confirmRotateSecret() {
-  const s = service.value
-  Modal.confirm({
-    title: `หมุน secret_key ของ "${s?.label}" ?`,
-    content:
-      'ใบเก่ายังใช้ได้จนกว่าจะกด "ยืนยันใบใหม่แล้ว" — เปลี่ยนฝั่ง server (K8s Secret) ให้เสร็จก่อนค่อยกดยืนยัน ไม่งั้น host จะขาดการเชื่อมต่อ',
-    okText: 'หมุนใบใหม่',
-    okType: 'danger',
-    cancelText: 'ยกเลิก',
-    onOk: () => doIssueOrRotate('rotate'),
-  })
-}
-
-function confirmCommitSecret() {
-  const o = office.value
-  const s = service.value
-  if (!o || !s) return
-  Modal.confirm({
-    title: `ยืนยันใบใหม่แล้ว — ตัดใบเก่าของ "${s.label}" ?`,
-    content: 'ทำเมื่อ host เปลี่ยนไปใช้ secret ใบใหม่ครบแล้วเท่านั้น — ใบเก่าจะใช้ไม่ได้ทันที',
-    okText: 'ตัดใบเก่า',
-    okType: 'danger',
-    cancelText: 'ยกเลิก',
-    async onOk() {
-      try {
-        apply(await commitSecret(o.id, s.id))
-        message.success('ตัดใบเก่าแล้ว')
-      } catch (e) {
-        message.error(apiErrorText(e))
-      }
-    },
-  })
-}
-
-function confirmRevokeSecret() {
-  const o = office.value
-  const s = service.value
-  if (!o || !s) return
-  Modal.confirm({
-    title: `ยกเลิก secret_key ของ "${s.label}" ?`,
-    content: 'host จะเชื่อมต่อไม่ได้ทันทีทั้ง 2 ใบ (ใบปัจจุบัน + ใบก่อนหน้า) — ต้องออกใบใหม่ถึงจะใช้ได้อีกครั้ง',
-    okText: 'ยกเลิก secret',
-    okType: 'danger',
-    cancelText: 'ไม่ยกเลิก',
-    async onOk() {
-      try {
-        apply(await revokeSecret(o.id, s.id))
-        message.success('ยกเลิก secret แล้ว')
-      } catch (e) {
-        message.error(apiErrorText(e))
-      }
-    },
-  })
-}
-
-function copySecret() {
-  navigator.clipboard
-    ?.writeText(secretModalValue.value)
-    .then(() => message.success('คัดลอกแล้ว'))
-    .catch(() => message.error('คัดลอกไม่ได้ — เลือกข้อความแล้วกด copy เอง'))
-}
-
-function closeSecretModal() {
-  secretModalOpen.value = false
-  secretModalValue.value = '' // ปิดแล้วล้างทันที — ไม่ค้างใน state ของหน้า (P-8)
-}
-
 function confirmDeleteService() {
   const o = office.value
   const s = service.value
@@ -394,7 +294,6 @@ onMounted(() => {
             แล้ว deploy ไปกี่โดเมนก็ได้ · หลังบ้าน ai ดูจากโดเมนที่เปิดอยู่ว่าเป็น office ไหน
             จึงต้องใส่ <strong>โดเมนที่อนุญาต</strong> ด้านล่างให้ครบ
           </div>
-          <div class="hint">แบบระบุ key ของ office นี้ (ใช้เมื่อ build แยกต่อ office): <code>{{ snippet }}</code></div>
 
           <label>data-host-api-base <span class="opt">— ไม่บังคับ</span></label>
           <a-input v-model:value="hostApiBase" placeholder="เช่น https://api.k11s.local/ai" />
@@ -413,13 +312,6 @@ onMounted(() => {
 
           <label>โดเมนที่อนุญาต (บรรทัดละ 1 โดเมน · 1 โดเมนอยู่ได้ office เดียว)</label>
           <a-textarea v-model:value="originsText" :rows="3" placeholder="http://localhost:5174" />
-          <div class="hint">
-            ต้องเป็น scheme + host เท่านั้น ห้ามมี path · key ที่หลุดออกไปใช้จากโดเมนอื่นไม่ได้
-            <br />เพิ่มตรงนี้แล้ว CORS เปิดให้ทันทีโดยไม่ต้อง deploy
-          </div>
-
-          <label>URL ของ API หลังบ้านเดิม</label>
-          <a-input v-model:value="office.backoffice_api_url" placeholder="https://api.k11s.local" />
           <div class="hint">
             <strong>ใช้ระบุว่าเป็น officeลูกค้า เจ้าไหน</strong> — widget ที่เปิดจากโดเมนเหล่านี้จะได้การตั้งค่าของ office นี้
             <br />ใส่แค่ <code>https://โดเมน</code> ห้ามมี path · 1 โดเมนอยู่ได้แค่ office เดียว ·
@@ -540,36 +432,6 @@ onMounted(() => {
           </template>
         </a-card>
 
-        <a-card v-if="service" size="small" class="tidy" title="secret_key ของ service นี้" style="margin-bottom: 16px">
-          <p class="modal-intro" style="margin-top: 0">
-            host ใช้ค่านี้ยืนยันตัวตนตอนขอตั๋วให้ผู้เล่น — เก็บไว้ใน K8s Secret (<code>AI_SERVICE_SECRETS</code>) ของหลังบ้าน ห้ามใส่ในหน้าเว็บหรือไฟล์ที่ git track
-          </p>
-          <div class="secret-status">
-            <a-tag :color="service.has_secret ? 'green' : 'default'">{{ service.has_secret ? 'มี secret ใช้งานอยู่' : 'ยังไม่มี secret' }}</a-tag>
-            <a-tag v-if="service.has_prev_secret" color="gold">มีใบเก่าค้างอยู่ (ยังไม่ commit)</a-tag>
-          </div>
-          <div class="hint" v-if="service.secret_created_at">ออกครั้งแรก {{ new Date(service.secret_created_at).toLocaleString('th-TH') }}</div>
-          <div class="hint" v-if="service.secret_rotated_at">หมุนล่าสุด {{ new Date(service.secret_rotated_at).toLocaleString('th-TH') }}</div>
-          <div class="hint" v-if="service.secret_last_used_at">ใช้ล่าสุด {{ new Date(service.secret_last_used_at).toLocaleString('th-TH') }}</div>
-          <div class="hint" v-else>ยังไม่เคยถูกใช้</div>
-
-          <div class="row" style="margin-top: 12px; flex-wrap: wrap">
-            <a-button
-              v-if="!service.has_secret"
-              type="primary" size="small" :loading="secretLoading"
-              :disabled="!auth.can('secret.manage')"
-              @click="confirmIssueSecret"
-            >ออก secret ใหม่</a-button>
-            <template v-else>
-              <a-button size="small" :loading="secretLoading" :disabled="!auth.can('secret.manage')" @click="confirmRotateSecret">หมุน secret</a-button>
-              <a-button
-                v-if="service.has_prev_secret"
-                size="small" :disabled="!auth.can('secret.manage')" @click="confirmCommitSecret"
-              >ยืนยันใบใหม่แล้ว (ตัดใบเก่า)</a-button>
-              <a-button size="small" danger :disabled="!auth.can('secret.manage')" @click="confirmRevokeSecret">ยกเลิก secret</a-button>
-            </template>
-          </div>
-        </a-card>
       </template>
     </div>
 
@@ -605,27 +467,6 @@ onMounted(() => {
         <a-select-option v-for="c in connectors" :key="c.kind" :value="c.kind">{{ c.label }} ({{ c.kind }})</a-select-option>
       </a-select>
       <span class="fhint">ยังไม่ตั้ง = office นี้ยังเปิดปุ่ม AI ให้ผู้เล่นใช้ไม่ได้</span>
-    </div>
-  </a-modal>
-
-  <!-- secret ที่ออก/หมุนใหม่ — โชว์ครั้งเดียว -->
-  <a-modal
-    :open="secretModalOpen"
-    title="secret_key ใหม่ — แสดงครั้งเดียว"
-    :width="520"
-    :footer="null"
-    :mask-closable="false"
-    @cancel="closeSecretModal"
-  >
-    <a-alert
-      type="warning" show-icon style="margin-bottom: 14px"
-      message="คัดลอกตอนนี้เท่านั้น"
-      description="ปิดหน้าต่างนี้แล้วจะไม่มีทางเห็นค่านี้อีก — เอาไปใส่ AI_SERVICE_SECRETS (K8s Secret) ฝั่ง server ของหลังบ้านทันที ห้ามวางในหน้าเว็บ ไฟล์ที่ git track หรือแชตที่บันทึกไว้"
-    />
-    <pre class="snippet secret-value">{{ secretModalValue }}</pre>
-    <div class="row" style="margin-top: 12px; justify-content: flex-end">
-      <a-button @click="copySecret">คัดลอก</a-button>
-      <a-button type="primary" @click="closeSecretModal">ปิด — คัดลอกเรียบร้อยแล้ว</a-button>
     </div>
   </a-modal>
 
@@ -671,8 +512,6 @@ code { font-family: var(--font-mono); font-size: 11.5px; }
 .tidy :deep(.ant-card-head) { border-bottom-color: var(--line); min-height: 46px; }
 
 .empty-inline { margin: 12px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
-.secret-status { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 6px; }
-.secret-value { color: #ffe6a8; }
 
 /* empty state — ยังไม่มี office */
 .empty {

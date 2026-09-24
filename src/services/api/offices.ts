@@ -1,5 +1,5 @@
 import { request } from './client'
-import type { ConnectorInfo, Office, OfficePatch, SecretIssueResult, ServicePatch } from '@/types'
+import type { ConnectorInfo, Office, OfficePatch, ServicePatch } from '@/types'
 
 const base = '/api/ai/admin/offices'
 const enc = encodeURIComponent
@@ -31,23 +31,6 @@ export const patchService = (officeID: string, serviceID: string, patch: Service
 
 export const removeService = (officeID: string, serviceID: string) =>
   request<Office>(`${base}/${enc(officeID)}/services/${enc(serviceID)}`, { method: 'DELETE' })
-
-// ---- secret_key ต่อ service (R3) — แสดงครั้งเดียวในคำตอบของ issue/rotate เท่านั้น ----
-
-const secretBase = (officeID: string, serviceID: string) =>
-  `${base}/${enc(officeID)}/services/${enc(serviceID)}/secret`
-
-export const issueSecret = (officeID: string, serviceID: string) =>
-  request<SecretIssueResult>(secretBase(officeID, serviceID), { method: 'POST' })
-
-export const rotateSecret = (officeID: string, serviceID: string) =>
-  request<SecretIssueResult>(`${secretBase(officeID, serviceID)}/rotate`, { method: 'POST' })
-
-export const commitSecret = (officeID: string, serviceID: string) =>
-  request<Office>(`${secretBase(officeID, serviceID)}/commit`, { method: 'POST' })
-
-export const revokeSecret = (officeID: string, serviceID: string) =>
-  request<Office>(`${secretBase(officeID, serviceID)}/revoke`, { method: 'POST' })
 
 // ---- โควตาชั่วคราว (K4) ----
 
