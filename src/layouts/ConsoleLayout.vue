@@ -30,8 +30,8 @@ function onMenuClick({ key }: { key: string }) {
   else if (key === 'logout') doLogout()
 }
 
-function doLogout() {
-  auth.logout()
+async function doLogout() {
+  await auth.signOut()
   router.push('/login')
 }
 
@@ -62,14 +62,20 @@ onMounted(() => {
       </div>
       <nav>
         <RouterLink to="/offices">Offices</RouterLink>
-        <RouterLink v-if="auth.can('user.manage')" to="/users">ผู้ใช้คอนโซล</RouterLink>
-        <RouterLink v-if="auth.can('user.manage')" to="/roles">สิทธิ์ของ role</RouterLink>
+        <RouterLink v-if="auth.can('conversation.read')" to="/history">ประวัติแชท</RouterLink>
+        <RouterLink v-if="auth.can('verification.write')" to="/review">ตรวจคำตอบ</RouterLink>
+        <RouterLink v-if="auth.can('quota.view')" to="/quota">โควตา/ต้นทุน</RouterLink>
+        <RouterLink v-if="auth.can('deletion.manage')" to="/deletion">ลบตามคำขอ (PDPA)</RouterLink>
+        <RouterLink to="/settings">ตั้งค่าระบบ</RouterLink>
         <div class="soon-group">
           <span class="soon-head">เร็วๆ นี้</span>
           <span class="soon">ภาพรวม</span>
-          <span class="soon">ประวัติแชท</span>
-          <span class="soon">ตรวจคำตอบ</span>
-          <span class="soon">โควตา</span>
+        </div>
+        <div class="admin-group">
+          <span class="admin-head">ผู้ดูแลคอนโซล</span>
+          <RouterLink v-if="auth.can('user.manage')" to="/users">ผู้ใช้คอนโซล</RouterLink>
+          <RouterLink v-if="auth.can('user.manage')" to="/roles">สิทธิ์ของ role</RouterLink>
+          <RouterLink v-if="auth.can('audit.view')" to="/activity">ประวัติการทำงาน</RouterLink>
         </div>
       </nav>
     </aside>
@@ -91,7 +97,7 @@ onMounted(() => {
           </template>
         </a-dropdown>
       </header>
-      <main><div class="container"><RouterView /></div></main>
+      <main><div class="page-wrap"><RouterView /></div></main>
     </div>
 
     <ChangePasswordModal v-model:open="changePasswordOpen" />
@@ -124,6 +130,8 @@ nav a.router-link-active::before { content: ""; position: absolute; left: 0; top
 .soon-group { display: flex; flex-direction: column; gap: 1px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .soon-head { padding: 0 12px 4px; font-size: 11px; color: var(--muted); }
 .soon { padding: 7px 12px; font-size: 13px; color: var(--muted); opacity: .75; }
+.admin-group { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.admin-head { padding: 0 12px 4px; font-size: 11px; color: var(--muted); }
 
 header {
   display: flex; gap: 8px; justify-content: flex-end; align-items: center;
@@ -132,7 +140,9 @@ header {
   position: fixed; top: 0; left: 240px; right: 0; height: 62px; z-index: 90; box-sizing: border-box;
 }
 main { padding: 28px 24px; }
-.container { max-width: 1180px; margin: 0 auto; }
+/* เต็มความกว้างจอทุกหน้า
+   ห้ามตั้งชื่อ class ว่า "container" — ชนกับ utility ของ Tailwind ที่ใส่ max-width ตาม breakpoint ให้เอง */
+.page-wrap { width: 100%; min-width: 0; }
 
 .user-menu { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--ink); padding: 5px 8px; border-radius: var(--r-control); transition: background .12s; }
 .user-menu:hover { background: var(--ground); }
@@ -147,8 +157,8 @@ main { padding: 28px 24px; }
   .brand { padding-bottom: 12px; margin-bottom: 10px; }
   nav { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px; }
   nav a.router-link-active::before { display: none; }
-  .soon-group { flex-direction: row; flex-wrap: wrap; align-items: center; margin-top: 0; padding-top: 0; border-top: none; border-left: 1px solid var(--line); padding-left: 10px; margin-left: 4px; }
-  .soon-head { display: none; }
+  .soon-group, .admin-group { flex-direction: row; flex-wrap: wrap; align-items: center; margin-top: 0; padding-top: 0; border-top: none; border-left: 1px solid var(--line); padding-left: 10px; margin-left: 4px; }
+  .soon-head, .admin-head { display: none; }
   main { padding: 20px 16px; }
 }
 </style>

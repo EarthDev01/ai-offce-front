@@ -35,13 +35,13 @@ onMounted(() => {
 
   const s = document.createElement('script')
   s.id = SCRIPT_ID
-  // ใช้ key จริงของ office ที่กำลังตั้งค่า — โหมด preview ไม่ยิง API อยู่แล้ว
-  s.src = `${API_BASE}/widget/v1/${encodeURIComponent(props.office.public_key)}/ai-office.js`
+  // bundle ชุดเดียวกับที่ officeลูกค้า โหลด — โหมด preview ไม่ยิง API อยู่แล้ว
+  s.src = `${API_BASE}/widget/v1/ai-office.js`
   s.dataset.previewMount = '#widget-preview'
   s.onload = () => pushConfig()
   s.onerror = () => {
     const box = document.getElementById('widget-preview')
-    if (box) box.textContent = 'โหลด widget ไม่ได้ — backend ทำงานอยู่ไหม และ build widget แล้วหรือยัง'
+    if (box) box.textContent = 'โหลด widget ไม่ได้ — หลังบ้าน ai ทำงานอยู่ไหม และ build widget แล้วหรือยัง'
   }
   document.head.appendChild(s)
 })
@@ -76,7 +76,8 @@ watch(() => [props.office, props.service], pushConfig, { deep: true })
 .bar-label { font-size: 12.5px; font-weight: 600; color: var(--ink); }
 .note { font-size: 10.5px; color: var(--muted); margin-left: auto; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; }
 .box {
-  position: relative; height: 512px; overflow: hidden;
+  /* สูงตามจอ (กล่องนี้ sticky — ต้องไม่ล้นจอ) · แผงแชทจริงสูง 560 + ปุ่มลอย จึงให้ถึง ~760 */
+  position: relative; height: clamp(512px, calc(100vh - 190px), 760px); overflow: hidden;
   background:
     radial-gradient(circle at 1px 1px, rgba(19, 40, 43, 0.05) 1px, transparent 0) 0 0 / 18px 18px,
     var(--ground);

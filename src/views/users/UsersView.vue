@@ -247,6 +247,14 @@ onMounted(() => {
         <template v-else-if="column.key === 'actions'">
           <div class="actions">
             <a-button size="small" type="link" @click="openEdit(record)">แก้ไข</a-button>
+            <RouterLink
+              v-if="auth.can('audit.view')"
+              v-slot="{ navigate }"
+              :to="{ path: '/activity', query: { actor: record.username } }"
+              custom
+            >
+              <a-button size="small" type="link" @click="navigate">ประวัติ</a-button>
+            </RouterLink>
             <a-button size="small" type="link" @click="openResetPassword(record)">รีเซ็ตรหัสผ่าน</a-button>
             <a-popconfirm
               title="รีเซ็ต 2FA ของผู้ใช้นี้? เขาจะต้องตั้งค่าใหม่ตอน login ครั้งหน้า"
@@ -273,7 +281,7 @@ onMounted(() => {
   </a-card>
 
   <!-- create -->
-  <a-modal
+  <a-modal centered
     v-model:open="createOpen"
     title="เพิ่มผู้ใช้"
     ok-text="สร้าง"
@@ -298,7 +306,7 @@ onMounted(() => {
   </a-modal>
 
   <!-- edit -->
-  <a-modal
+  <a-modal centered
     v-model:open="editOpen"
     title="แก้ไขผู้ใช้"
     ok-text="บันทึก"
@@ -322,7 +330,7 @@ onMounted(() => {
   </a-modal>
 
   <!-- reset password -->
-  <a-modal
+  <a-modal centered
     v-model:open="passwordOpen"
     title="รีเซ็ตรหัสผ่าน"
     ok-text="ตั้งรหัสผ่านใหม่"

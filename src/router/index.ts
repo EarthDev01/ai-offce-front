@@ -18,6 +18,12 @@ const LoginView = () => import('@/views/auth/LoginView.vue')
 const SetupView = () => import('@/views/auth/SetupView.vue')
 const UsersView = () => import('@/views/users/UsersView.vue')
 const RolePermissionsView = () => import('@/views/roles/RolePermissionsView.vue')
+const HistoryView = () => import('@/views/history/HistoryView.vue')
+const ReviewView = () => import('@/views/review/ReviewView.vue')
+const QuotaView = () => import('@/views/quota/QuotaView.vue')
+const DeletionView = () => import('@/views/deletion/DeletionView.vue')
+const SettingsView = () => import('@/views/settings/SettingsView.vue')
+const AuditLogView = () => import('@/views/audit/AuditLogView.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -42,7 +48,43 @@ const router = createRouter({
           component: RolePermissionsView,
           meta: { requiresConsoleAuth: true, perm: 'user.manage' },
         },
-        // overview / history / review / quota — Phase 5
+        {
+          path: 'history',
+          name: 'history',
+          component: HistoryView,
+          meta: { requiresConsoleAuth: true, perm: 'conversation.read' },
+        },
+        {
+          path: 'review',
+          name: 'review',
+          component: ReviewView,
+          meta: { requiresConsoleAuth: true, perm: 'verification.write' },
+        },
+        {
+          path: 'quota',
+          name: 'quota',
+          component: QuotaView,
+          meta: { requiresConsoleAuth: true, perm: 'quota.view' },
+        },
+        {
+          path: 'deletion',
+          name: 'deletion',
+          component: DeletionView,
+          meta: { requiresConsoleAuth: true, perm: 'deletion.manage' },
+        },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: SettingsView,
+          meta: { requiresConsoleAuth: true, perm: 'office.view' },
+        },
+        {
+          path: 'activity',
+          name: 'activity',
+          component: AuditLogView,
+          meta: { requiresConsoleAuth: true, perm: 'audit.view' },
+        },
+        // overview — เฟส 2
       ],
     },
   ],

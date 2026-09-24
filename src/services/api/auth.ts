@@ -29,6 +29,9 @@ export const verifyTotp = (body: { ticket: string; code: string }) =>
 export const me = () =>
   request<{ user: ConsoleUser; permissions: PermissionKey[]; role_label: string }>(`${base}/me`)
 
+// บันทึกการออกจากระบบฝั่ง server (session เป็น JWT ไร้สถานะ — ไม่ได้ revoke token)
+export const logout = () => request<void>(`${base}/logout`, { method: 'POST' })
+
 export const changePassword = (body: { old_password: string; new_password: string }) =>
   request<void>(`${base}/change-password`, { method: 'POST', body: JSON.stringify(body) })
 
