@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   listOffices, createOffice, patchOffice, deleteOffice, rotateKey,
@@ -7,16 +7,25 @@ import {
 } from '@/services/api/offices'
 import { API_BASE } from '@/services/api/client'
 import WidgetPreview from '@/components/WidgetPreview.vue'
+import { useAuthStore } from '@/stores/auth'
 import type { Office, Service } from '@/types'
 
+const auth = useAuthStore()
 const offices = ref<Office[]>([])
 const officeId = ref('')
 const serviceId = ref('')
 const loadError = ref('')
+const loading = ref(true)
 const saving = ref(false)
 
 const originsText = ref('')
-const allowlistText = ref('')
+
+// ฟอร์ม modal สร้าง office / service
+const newOfficeOpen = ref(false)
+const newServiceOpen = ref(false)
+const creating = ref(false)
+const officeForm = reactive({ id: '', label: '' })
+const serviceForm = reactive({ id: '', label: '' })
 
 const office = computed(() => offices.value.find((o) => o.id === officeId.value) ?? null)
 const service = computed(() => office.value?.services.find((s) => s.id === serviceId.value) ?? null)
@@ -36,6 +45,8 @@ async function reload(keepService = true) {
     syncForm(keepService)
   } catch (e) {
     loadError.value = (e as Error).message
+  } finally {
+    loading.value = false
   }
 }
 
@@ -43,11 +54,9 @@ function syncForm(keepService = true) {
   const o = office.value
   originsText.value = o?.allowed_origins.join('\n') ?? ''
   if (!keepService || !service.value) serviceId.value = o?.services[0]?.id ?? ''
-  allowlistText.value = service.value?.allowlist.join('\n') ?? ''
 }
 
 watch(officeId, () => syncForm(false))
-watch(serviceId, () => { allowlistText.value = service.value?.allowlist.join('\n') ?? '' })
 
 function apply(updated: Office) {
   const i = offices.value.findIndex((o) => o.id === updated.id)
@@ -70,25 +79,26 @@ async function run(fn: () => Promise<Office | null>, okMsg: string) {
 
 // ---------- office ----------
 function newOffice() {
-  let id = ''
-  let label = ''
-  Modal.confirm({
-    title: 'เพิ่ม office ใหม่',
-    content: () => [
-      h('p', { style: 'font-size:12.5px;color:#778785' }, 'office = หลังบ้าน 1 ชุด (1 การติดตั้ง) ที่จะเอา snippet ไปแปะ'),
-      h('input', { placeholder: 'id เช่น acme', class: 'ant-input', onInput: (e: any) => (id = e.target.value) }),
-      h('div', { style: 'height:8px' }),
-      h('input', { placeholder: 'ชื่อที่แสดง', class: 'ant-input', onInput: (e: any) => (label = e.target.value) }),
-    ],
-    okText: 'สร้าง',
-    cancelText: 'ยกเลิก',
-    async onOk() {
-      const o = await createOffice(id.trim(), label.trim())
-      apply(o)
-      officeId.value = o.id
-      message.success(`สร้าง office ${o.id} แล้ว`)
-    },
-  })
+  officeForm.id = ''
+  officeForm.label = ''
+  newOfficeOpen.value = true
+}
+
+async function submitNewOffice() {
+  const id = officeForm.id.trim()
+  if (!id) return
+  creating.value = true
+  try {
+    const o = await createOffice(id, officeForm.label.trim())
+    apply(o)
+    officeId.value = o.id
+    newOfficeOpen.value = false
+    message.success(`สร้าง office ${o.id} แล้ว`)
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    creating.value = false
+  }
 }
 
 function saveOffice() {
@@ -145,27 +155,28 @@ function confirmRotate() {
 
 // ---------- service ----------
 function newService() {
+  if (!office.value) return
+  serviceForm.id = ''
+  serviceForm.label = ''
+  newServiceOpen.value = true
+}
+
+async function submitNewService() {
   const o = office.value
-  if (!o) return
-  let id = ''
-  let label = ''
-  Modal.confirm({
-    title: `เพิ่ม service ใน ${o.label}`,
-    content: () => [
-      h('p', { style: 'font-size:12.5px;color:#778785' }, 'service = แบรนด์/เว็บย่อยที่แอดมินสลับดูในหลังบ้านชุดนี้ · ไม่ต้องแก้ snippet'),
-      h('input', { placeholder: 'id เช่น K11S', class: 'ant-input', onInput: (e: any) => (id = e.target.value) }),
-      h('div', { style: 'height:8px' }),
-      h('input', { placeholder: 'ชื่อที่แสดง', class: 'ant-input', onInput: (e: any) => (label = e.target.value) }),
-    ],
-    okText: 'เพิ่ม',
-    cancelText: 'ยกเลิก',
-    async onOk() {
-      const updated = await addService(o.id, id.trim(), label.trim())
-      apply(updated)
-      serviceId.value = id.trim()
-      message.success('เพิ่ม service แล้ว')
-    },
-  })
+  const id = serviceForm.id.trim()
+  if (!o || !id) return
+  creating.value = true
+  try {
+    const updated = await addService(o.id, id, serviceForm.label.trim())
+    apply(updated)
+    serviceId.value = id
+    newServiceOpen.value = false
+    message.success('เพิ่ม service แล้ว')
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    creating.value = false
+  }
 }
 
 function saveService() {
@@ -180,7 +191,6 @@ function saveService() {
         display_name: s.display_name,
         greeting: s.greeting,
         avatar_url: s.avatar_url,
-        allowlist: allowlistText.value.split('\n').map((x) => x.trim()).filter(Boolean),
       }),
     'บันทึก service แล้ว',
   )
@@ -211,38 +221,56 @@ function copySnippet() {
     .catch(() => message.error('คัดลอกไม่ได้ — เลือกข้อความแล้วกด copy เอง'))
 }
 
-import { h } from 'vue'
 onMounted(() => reload(false))
 </script>
 
 <template>
-  <h1 style="font-size: 20px; margin-bottom: 4px">Offices &amp; Services</h1>
-  <p style="color: var(--muted); font-size: 13.5px; margin: 0 0 18px">
-    <strong>office</strong> = หลังบ้าน 1 ชุด (1 snippet) · <strong>service</strong> = แบรนด์/เว็บย่อยใต้ office นั้น
-    — 1 office มีได้หลาย service และสลับได้โดยไม่ต้องแก้ snippet
-  </p>
+  <div class="page-head">
+    <h1>Offices</h1>
+    <p class="sub">
+      แต่ละ office คือหลังบ้าน 1 ชุด (snippet 1 ชิ้นที่เอาไปแปะในเว็บลูกค้า)
+      เพิ่ม service ไว้ข้างในได้หลายแบรนด์ และสลับดูได้โดยไม่ต้องแก้ snippet
+    </p>
+  </div>
 
-  <a-alert v-if="loadError" type="error" :message="loadError" show-icon style="margin-bottom: 16px" />
+  <!-- กำลังโหลด — กัน empty state แว๊บก่อนข้อมูลมา -->
+  <div v-if="loading" class="loading-state">
+    <a-spin />
+  </div>
 
-  <div class="cols">
+  <a-alert v-else-if="loadError" type="error" :message="loadError" show-icon style="margin-bottom: 16px" />
+
+  <!-- empty state — ยังไม่มี office -->
+  <div v-else-if="offices.length === 0" class="empty">
+    <span class="empty-mark" aria-hidden="true">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+        <path d="M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-4 3.5V17H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill="currentColor" />
+      </svg>
+    </span>
+    <h2>ยังไม่มี office</h2>
+    <p>สร้าง office แรกเพื่อเริ่มติดตั้ง widget ให้ลูกค้า</p>
+    <a-button type="primary" size="large" :disabled="!auth.can('office.edit')" @click="newOffice">สร้าง office</a-button>
+  </div>
+
+  <div v-else class="cols">
     <div class="form">
-      <a-card size="small" style="margin-bottom: 14px">
+      <a-card size="small" class="tidy" style="margin-bottom: 16px">
         <div class="row">
           <a-select v-model:value="officeId" style="flex: 1" placeholder="เลือก office">
             <a-select-option v-for="o in offices" :key="o.id" :value="o.id">
               {{ o.label }} ({{ o.id }}) · {{ o.services.length }} service
             </a-select-option>
           </a-select>
-          <a-button @click="newOffice">+ office</a-button>
+          <a-button :disabled="!auth.can('office.edit')" @click="newOffice">สร้าง office</a-button>
         </div>
       </a-card>
 
       <template v-if="office">
-        <a-card size="small" title="snippet ที่ให้ลูกค้าแปะ" style="margin-bottom: 14px">
+        <a-card size="small" class="tidy" title="Snippet ที่ให้ลูกค้าแปะ" style="margin-bottom: 16px">
           <pre class="snippet">{{ snippet }}</pre>
-          <div class="row" style="margin-top: 10px">
-            <a-button size="small" @click="copySnippet">คัดลอก</a-button>
-            <a-button size="small" danger @click="confirmRotate">เปลี่ยน key</a-button>
+          <div class="row" style="margin-top: 12px">
+            <a-button size="small" type="primary" @click="copySnippet">คัดลอก snippet</a-button>
+            <a-button size="small" danger :disabled="!auth.can('office.rotate')" @click="confirmRotate">เปลี่ยน key</a-button>
           </div>
           <div class="hint">
             key ไม่ใช่ความลับ — มันบอกแค่ว่าหน้านี้เป็นของ office ไหน
@@ -250,7 +278,7 @@ onMounted(() => reload(false))
           </div>
         </a-card>
 
-        <a-card size="small" title="office" style="margin-bottom: 14px">
+        <a-card size="small" class="tidy" title="ตั้งค่า office" style="margin-bottom: 16px">
           <label>ชื่อที่แสดง</label>
           <a-input v-model:value="office.label" />
 
@@ -302,23 +330,26 @@ onMounted(() => reload(false))
           </div>
 
           <div class="row" style="margin-top: 14px">
-            <a-button type="primary" :loading="saving" @click="saveOffice">บันทึก office</a-button>
-            <a-button danger @click="confirmDeleteOffice">ลบ office</a-button>
+            <a-button type="primary" :loading="saving" :disabled="!auth.can('office.edit')" @click="saveOffice">บันทึก office</a-button>
+            <a-button danger :disabled="!auth.can('office.delete')" @click="confirmDeleteOffice">ลบ office</a-button>
           </div>
           <div v-if="office.updated_by" class="hint">
             แก้ล่าสุดโดย {{ office.updated_by }} · {{ new Date(office.updated_at).toLocaleString('th-TH') }}
           </div>
         </a-card>
 
-        <a-card size="small" title="services" style="margin-bottom: 14px">
+        <a-card size="small" class="tidy" title="Services" style="margin-bottom: 16px">
           <div class="row">
             <a-select v-model:value="serviceId" style="flex: 1" placeholder="ยังไม่มี service">
               <a-select-option v-for="s in office.services" :key="s.id" :value="s.id">
                 {{ s.label }} ({{ s.id }}) {{ s.enabled ? '· เปิด' : '· ปิด' }}
               </a-select-option>
             </a-select>
-            <a-button @click="newService">+ service</a-button>
+            <a-button :disabled="!auth.can('office.edit')" @click="newService">เพิ่ม service</a-button>
           </div>
+          <p v-if="office.services.length === 0" class="empty-inline">
+            ยังไม่มี service ใน office นี้ — เพิ่ม service แรกเพื่อกำหนดชื่อ รูป และคำทักทายของ AI
+          </p>
 
           <template v-if="service">
             <a-divider style="margin: 14px 0" />
@@ -341,35 +372,103 @@ onMounted(() => reload(false))
             <a-switch v-model:checked="service.enabled" />
             <span class="sw">เปิดใช้งาน service นี้</span>
 
-            <label>รายชื่อบัญชีที่ใช้ได้ (บรรทัดละ 1 ชื่อ)</label>
-            <a-textarea v-model:value="allowlistText" :rows="4" placeholder="adm_ploy" />
             <div class="hint">
-              ว่างไว้ = ยังไม่มีใครใช้ได้ · รอบแรกเปิดตามรายชื่อ ไม่เปิดทุกคน
-              <br>ใส่เป็น <strong>username ของหลังบ้าน</strong> · นี่คือด่านคุมการปล่อยของเรา
-              คนละเรื่องกับสิทธิ์จริงที่ office เป็นคนตัดสิน (แอดมินที่ไม่มีสิทธิ์ใน service นี้อยู่แล้ว
-              จะถูกปฏิเสธก่อนถึงรายชื่อนี้)
+              ใครก็ตามที่ล็อกอินหลังบ้านสำเร็จ + มีสิทธิ์ใน service นี้ จะเห็นปุ่ม AI ได้เลย
+              — ไม่ต้องกำหนดรายชื่อ
             </div>
 
             <div class="row" style="margin-top: 14px">
-              <a-button type="primary" :loading="saving" @click="saveService">บันทึก service</a-button>
-              <a-button danger @click="confirmDeleteService">ลบ service</a-button>
+              <a-button type="primary" :loading="saving" :disabled="!auth.can('office.edit')" @click="saveService">บันทึก service</a-button>
+              <a-button danger :disabled="!auth.can('office.delete')" @click="confirmDeleteService">ลบ service</a-button>
             </div>
           </template>
         </a-card>
       </template>
     </div>
 
-    <WidgetPreview v-if="office" :office="office" :service="service" />
+    <!-- :key = public_key → พอ rotate key หรือสลับ office ตัว preview re-mount โหลด script ใหม่เอง ไม่ต้อง refresh -->
+    <WidgetPreview v-if="office" :key="office.public_key" :office="office" :service="service" />
   </div>
+
+  <!-- สร้าง office -->
+  <a-modal
+    v-model:open="newOfficeOpen"
+    title="เพิ่ม office"
+    :width="440"
+    :confirm-loading="creating"
+    ok-text="สร้าง office"
+    cancel-text="ยกเลิก"
+    :ok-button-props="{ disabled: !officeForm.id.trim() }"
+    @ok="submitNewOffice"
+  >
+    <p class="modal-intro">office คือหลังบ้าน 1 ชุด — snippet 1 ชิ้นที่เอาไปแปะในเว็บลูกค้า</p>
+    <div class="field">
+      <label>รหัส office</label>
+      <a-input v-model:value="officeForm.id" placeholder="เช่น acme" @keyup.enter="submitNewOffice" />
+      <span class="fhint">ตัวอักษร ตัวเลข - _ · ใช้อ้างอิงภายใน เปลี่ยนภายหลังไม่ได้</span>
+    </div>
+    <div class="field">
+      <label>ชื่อที่แสดง <span class="opt">— ไม่บังคับ</span></label>
+      <a-input v-model:value="officeForm.label" placeholder="เช่น Acme Thailand" @keyup.enter="submitNewOffice" />
+      <span class="fhint">ชื่อที่เห็นในคอนโซล เว้นว่างได้ จะใช้รหัสแทน</span>
+    </div>
+  </a-modal>
+
+  <!-- เพิ่ม service -->
+  <a-modal
+    v-model:open="newServiceOpen"
+    title="เพิ่ม service"
+    :width="440"
+    :confirm-loading="creating"
+    ok-text="เพิ่ม service"
+    cancel-text="ยกเลิก"
+    :ok-button-props="{ disabled: !serviceForm.id.trim() }"
+    @ok="submitNewService"
+  >
+    <p class="modal-intro">service = แบรนด์หรือเว็บย่อยใต้ office นี้ · สลับดูได้โดยไม่ต้องแก้ snippet</p>
+    <div class="field">
+      <label>รหัส service</label>
+      <a-input v-model:value="serviceForm.id" placeholder="เช่น K11S" @keyup.enter="submitNewService" />
+      <span class="fhint">ต้องตรงกับ web-service ที่หลังบ้านส่งมาตอนแอดมินเปิดเว็บนั้น</span>
+    </div>
+    <div class="field">
+      <label>ชื่อที่แสดง <span class="opt">— ไม่บังคับ</span></label>
+      <a-input v-model:value="serviceForm.label" placeholder="เช่น เว็บ K11S" @keyup.enter="submitNewService" />
+      <span class="fhint">ชื่อที่เห็นในคอนโซล</span>
+    </div>
+  </a-modal>
 </template>
 
 <style scoped>
-.cols { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 22px; align-items: start; }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; align-items: start; }
 @media (max-width: 1100px) { .cols { grid-template-columns: minmax(0, 1fr); } }
 .row { display: flex; gap: 8px; align-items: center; }
-label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 4px; }
+/* เฉพาะ label ป้ายฟอร์มปกติ (ไม่มี class) — ไม่แตะ .ant-radio-button-wrapper ซึ่งก็เป็น <label> */
+label:not([class]) { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 4px; }
 .hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.65; }
 .sw { margin-left: 8px; font-size: 14px; }
-.snippet { font-family: var(--font-mono); font-size: 11.5px; background: #16252b; color: #d9e6e2; padding: 12px; border-radius: 8px; overflow: auto; margin: 0; }
+.snippet { font-family: var(--font-mono); font-size: 11.5px; background: #16252b; color: #d9e6e2; padding: 14px; border-radius: 10px; overflow: auto; margin: 0; line-height: 1.6; }
 code { font-family: var(--font-mono); font-size: 11.5px; }
+
+/* card ให้เข้ากับ token — มุม 14, เส้น --line, หัวการ์ดใช้ฟอนต์หัวเรื่อง ไม่มีเงา */
+.tidy { border-radius: var(--r-card); border-color: var(--line); }
+.tidy :deep(.ant-card-head-title) { font-family: var(--font-head); font-weight: 600; font-size: 15px; }
+.tidy :deep(.ant-card-head) { border-bottom-color: var(--line); min-height: 46px; }
+
+.empty-inline { margin: 12px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
+
+/* empty state — ยังไม่มี office */
+.empty {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 6px; max-width: 460px; margin: 8px auto; padding: 48px 32px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card);
+}
+.empty-mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 60px; height: 60px; margin-bottom: 6px; border-radius: 16px;
+  background: var(--accent-soft); color: var(--accent);
+}
+.empty h2 { font-size: 18px; }
+.empty p { margin: 0 0 16px; font-size: 13.5px; color: var(--muted); max-width: 34ch; }
+.loading-state { display: flex; justify-content: center; align-items: center; min-height: 320px; }
 </style>
