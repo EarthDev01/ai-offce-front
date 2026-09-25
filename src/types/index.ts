@@ -179,6 +179,8 @@ export interface Settings {
   llm: LLMSettings
   /** ค่าล่าสุดที่เคยบันทึกของแต่ละ provider (key = provider id) — server ดูแลเอง ไม่ต้องส่งกลับ */
   llm_recent?: Record<string, LLMSettings>
+  /** ปุ่มผู้ช่วย AI ในคอนโซล (ค่าเริ่มต้นปิด) */
+  assistant_enabled: boolean
   updated_at: string
   updated_by: string
 }

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import ChangePasswordModal from '@/components/ChangePasswordModal.vue'
 import NavIcon from '@/components/NavIcon.vue'
+import ConsoleAssistant from '@/components/ConsoleAssistant.vue'
 import { NAV_GROUPS, SOON_ITEMS } from '@/utils/permissionGroups'
 
 const router = useRouter()
@@ -115,6 +116,7 @@ onMounted(() => {
     </div>
 
     <ChangePasswordModal v-model:open="changePasswordOpen" />
+    <ConsoleAssistant />
   </div>
 </template>
 

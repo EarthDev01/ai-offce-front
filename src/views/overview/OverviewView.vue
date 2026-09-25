@@ -28,6 +28,7 @@ const colors = computed(() => colorMap(allKeys.value))
 const labelOf = computed(() => {
   const m: Record<string, string> = {}
   for (const o of offices.value) for (const s of o.services) m[`${o.id}|${s.id}`] = `${s.label || s.id}`
+  m['_console|assistant'] = 'ผู้ช่วยคอนโซล' // token ของผู้ช่วย AI ในคอนโซล นับแยกจาก domain ของลูกค้า
   return m
 })
 const officeOf = (k: string) => k.split('|')[0]

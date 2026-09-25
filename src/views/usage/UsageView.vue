@@ -9,10 +9,13 @@ import DateRangeFilter from '@/components/DateRangeFilter.vue'
 import type { DailyRollup, Office, UsagePeriod } from '@/types'
 
 const offices = ref<Office[]>([])
+// token ของผู้ช่วย AI ในคอนโซลนับแยกไว้ใต้รหัสนี้ (ไม่ใช่ domain ของลูกค้า)
+const CONSOLE_USAGE = '_console'
 const nf = new Intl.NumberFormat('th-TH')
 const n = (v: number) => nf.format(v ?? 0)
 
 function labelOf(officeID: string, serviceID: string) {
+  if (officeID === CONSOLE_USAGE) return 'ผู้ช่วยคอนโซล'
   const o = offices.value.find((x) => x.id === officeID)
   const s = o?.services.find((x) => x.id === serviceID)
   return `${o?.label ?? officeID} / ${s?.label ?? serviceID}`
