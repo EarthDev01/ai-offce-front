@@ -13,6 +13,7 @@ export type PermissionKey =
   | 'deletion.manage'
   | 'settings.manage'
   | 'accesslog.view'
+  | 'llm.key.manage'
 
 export interface RoleDef {
   key: string

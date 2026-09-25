@@ -86,6 +86,7 @@ export const PERM_GROUPS: PermGroup[] = [
       { key: 'user.manage', opens: 'เมนูผู้ใช้คอนโซล และหน้านี้ (สิทธิ์ของ role)' },
       { key: 'audit.view', opens: 'เมนูประวัติการทำงาน' },
       { key: 'settings.manage', opens: 'แก้ค่าในหน้าตั้งค่าระบบ' },
+      { key: 'llm.key.manage', opens: 'ตั้ง/เปลี่ยน/ลบ API key ของโมเดล AI (ยืนยัน 2FA ทุกครั้ง)' },
     ],
   },
 ]

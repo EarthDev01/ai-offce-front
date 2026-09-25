@@ -331,8 +331,8 @@ onMounted(() => reload(true))
           </div>
 
           <div class="row" style="margin-top: 14px">
-            <a-button type="primary" :loading="saving" :disabled="!auth.can('office.edit')" @click="saveOffice">บันทึก office</a-button>
-            <a-button danger :disabled="!auth.can('office.delete')" @click="confirmDeleteOffice">ลบ office</a-button>
+            <a-button type="primary" :loading="saving" :disabled="!auth.can('office.edit')" @click="saveOffice">บันทึก domain</a-button>
+            <a-button danger :disabled="!auth.can('office.delete')" @click="confirmDeleteOffice">ลบ domain</a-button>
           </div>
           <div v-if="office.updated_by" class="hint">
             แก้ล่าสุดโดย {{ office.updated_by }} · {{ new Date(office.updated_at).toLocaleString('th-TH') }}
@@ -349,7 +349,7 @@ onMounted(() => reload(true))
             <a-button :disabled="!auth.can('office.edit')" @click="newService">เพิ่ม service</a-button>
           </div>
           <p v-if="office.services.length === 0" class="empty-inline">
-            ยังไม่มี service ใน office นี้ — เพิ่ม service แรกเพื่อกำหนดชื่อ รูป และคำทักทายของ AI
+            ยังไม่มี service ใน domain นี้ — เพิ่ม service แรกเพื่อกำหนดชื่อ รูป และคำทักทายของ AI
           </p>
 
           <template v-if="service">

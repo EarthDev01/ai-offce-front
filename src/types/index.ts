@@ -176,16 +176,63 @@ export interface Settings {
   max_output_tokens: number
   history_turns: number
   tool_timeout_ms: number
+  llm: LLMSettings
+  /** ค่าล่าสุดที่เคยบันทึกของแต่ละ provider (key = provider id) — server ดูแลเอง ไม่ต้องส่งกลับ */
+  llm_recent?: Record<string, LLMSettings>
   updated_at: string
   updated_by: string
 }
 
-export type SettingsPatch = Partial<Omit<Settings, 'updated_at' | 'updated_by'>> & { updated_at: string }
+/** โมเดลที่ใช้ตอบแชท — API key อยู่ใน .env ของหลังบ้าน ai ไม่ผ่านหน้าเว็บ */
+export interface LLMSettings {
+  provider: string
+  model: string
+  /** anthropic เท่านั้น */
+  effort: string
+  /** openai เท่านั้น */
+  base_url: string
+}
+
+export interface LLMProvider {
+  id: string
+  label: string
+  env_key: string
+  models: string[]
+  efforts?: string[]
+  needs_base_url: boolean
+  /** มี key พร้อมใช้ไหม (server ไม่เคยส่งตัว key มา) */
+  has_key: boolean
+  key: LLMKeyInfo
+}
+
+/** สถานะ API key ของ provider — มีแค่ 4 ตัวท้าย ไม่มีตัว key */
+export interface LLMKeyInfo {
+  has_key?: boolean
+  last4?: string
+  /** db = ตั้งจากคอนโซล (เข้ารหัส) · env = มาจาก .env (ยังไม่ได้ตั้ง LLM_KEY_SECRET) */
+  source?: 'db' | 'env'
+  /** มีใน DB แต่ถอดรหัสไม่ได้ (กุญแจหลักเปลี่ยน) ต้องตั้งใหม่ */
+  broken?: boolean
+  updated_at?: string
+  updated_by?: string
+}
+
+export interface LLMTestResult {
+  latency_ms: number
+  reply: string
+  usage: { input_tokens: number; output_tokens: number; cache_read: number; cache_write: number }
+}
+
+export type SettingsPatch = Partial<Omit<Settings, 'updated_at' | 'updated_by' | 'llm_recent'>> & { updated_at: string }
 
 export interface SettingsView {
   settings: Settings
   ranges: Record<string, [number, number]>
-  llm: { provider: string; model: string; enabled: boolean }
+  llm_providers: LLMProvider[]
+  /** โมเดลที่บันทึกไว้มี key พร้อมตอบแชท */
+  llm_ready: boolean
+  /** false = ยังไม่ตั้ง LLM_KEY_SECRET ตั้ง key จากหน้าเว็บไม่ได้ */
+  llm_key_store: boolean
 }
 
 export interface UsagePeriod {

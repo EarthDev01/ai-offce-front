@@ -28,6 +28,7 @@ const ReviewView = () => import('@/views/review/ReviewView.vue')
 const UsageView = () => import('@/views/usage/UsageView.vue')
 const DeletionView = () => import('@/views/deletion/DeletionView.vue')
 const SettingsView = () => import('@/views/settings/SettingsView.vue')
+const GuideView = () => import('@/views/guide/GuideView.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -47,6 +48,8 @@ const router = createRouter({
           meta: { requiresConsoleAuth: true, perm: 'usage.view' },
         },
         { path: 'offices', name: 'offices', component: OfficesOverview, meta: { requiresConsoleAuth: true } },
+        // คู่มือ — ทุกคนที่ล็อกอินเปิดได้ (ทางเข้าอยู่ที่ header ข้างชื่อผู้ใช้)
+        { path: 'guide', name: 'guide', component: GuideView, meta: { requiresConsoleAuth: true } },
         { path: 'offices/:id', name: 'office', component: OfficesView, meta: { requiresConsoleAuth: true } },
         {
           path: 'users',

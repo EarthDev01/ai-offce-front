@@ -10,6 +10,7 @@ export const CATEGORY_META: Record<string, { label: string; color: string }> = {
   role: { label: 'Role / สิทธิ์', color: 'gold' },
   access: { label: 'ถูกปฏิเสธสิทธิ์', color: 'volcano' },
   settings: { label: 'ตั้งค่าระบบ', color: 'lime' },
+  llm_key: { label: 'API key', color: 'magenta' },
   deletion: { label: 'ลบตามคำขอ', color: 'red' },
 }
 
@@ -50,6 +51,9 @@ export const ACTION_LABELS: Record<string, string> = {
   'access.denied': 'ถูกปฏิเสธสิทธิ์',
 
   'settings.update': 'แก้ตั้งค่าระบบ',
+  'llm_key.set': 'ตั้ง/เปลี่ยน API key',
+  'llm_key.delete': 'ลบ API key',
+  'auth.stepup_failed': 'ยืนยัน 2FA ไม่ผ่าน',
   'deletion.request': 'ลบข้อมูลแชทตามคำขอ',
 }
 
@@ -79,6 +83,10 @@ const FIELD_LABELS: Record<string, Record<string, string>> = {
     max_output_tokens: 'ความยาวคำตอบสูงสุด (token)',
     history_turns: 'ประวัติที่ส่งให้ LLM (รอบ)',
     tool_timeout_ms: 'เวลารอหลังบ้านต่อเส้น (ms)',
+    'llm.provider': 'LLM provider',
+    'llm.model': 'โมเดล AI',
+    'llm.effort': 'effort ของโมเดล',
+    'llm.base_url': 'Base URL ของโมเดล',
   },
   group: {
     name: 'ชื่อกลุ่ม',
@@ -107,6 +115,7 @@ const FIELD_LABELS: Record<string, Record<string, string>> = {
     status: 'สถานะ',
   },
   role: {},
+  llm_key: { key: 'API key' },
 }
 
 export function fieldLabel(targetType: string, field: string) {
@@ -124,6 +133,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   'usage.view': 'ดูการใช้งาน token',
   'deletion.manage': 'ลบข้อมูลแชทตามคำขอ',
   'settings.manage': 'แก้ตั้งค่าระบบ',
+  'llm.key.manage': 'จัดการ API key ของโมเดล AI',
   'accesslog.view': 'ดูบันทึกการเข้าถึงข้อมูลแชท',
 }
 

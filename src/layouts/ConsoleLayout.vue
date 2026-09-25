@@ -91,6 +91,11 @@ onMounted(() => {
 
     <div class="body">
       <header>
+        <RouterLink to="/guide" class="guide-link" :class="{ on: route.path === '/guide' }">
+          <NavIcon name="guide" />
+          <span>คู่มือ</span>
+        </RouterLink>
+        <span class="head-sep" aria-hidden="true" />
         <a-dropdown placement="bottomRight" @click.prevent>
           <a class="user-menu" @click.prevent>
             <span class="avatar" aria-hidden="true">{{ (auth.user?.display_name || auth.user?.username || '?').charAt(0).toUpperCase() }}</span>
@@ -190,6 +195,14 @@ main { padding: 40px 32px 32px; }
    ห้ามตั้งชื่อ class ว่า "container" — ชนกับ utility ของ Tailwind ที่ใส่ max-width ตาม breakpoint ให้เอง */
 .page-wrap { width: 100%; min-width: 0; }
 
+.guide-link {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  font-size: 13.5px; font-weight: 500; color: var(--muted); text-decoration: none;
+  border: 1px solid var(--line); transition: color .12s, border-color .12s, background .12s;
+}
+.guide-link:hover { color: var(--accent); border-color: var(--accent); }
+.guide-link.on { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.head-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .user-menu { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--ink); padding: 5px 8px; border-radius: var(--r-control); transition: background .12s; }
 .user-menu:hover { background: var(--ground); }
 .avatar { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-strong); font-size: 13px; font-weight: 600; flex: none; }
