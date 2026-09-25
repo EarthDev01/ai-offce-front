@@ -1,31 +1,36 @@
 <script setup lang="ts">
+import { matchOption } from '@/utils/selectSearch'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
-  listOffices, createOffice, patchOffice, deleteOffice,
+  listOffices, listGroups, patchOffice, deleteOffice,
   addService, patchService, removeService,
 } from '@/services/api/offices'
 import { API_BASE } from '@/services/api/client'
 import WidgetPreview from '@/components/WidgetPreview.vue'
 import { useAuthStore } from '@/stores/auth'
-import type { Office, Service } from '@/types'
+import type { Office, OfficeGroup, Service } from '@/types'
 
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 const offices = ref<Office[]>([])
-const officeId = ref('')
-const serviceId = ref('')
+// office มาจาก URL /offices/:id · service ที่เลือกไว้มาจาก ?service= (กดมาจากหน้าภาพรวม)
+const officeId = ref(String(route.params.id ?? ''))
+const serviceId = ref(String(route.query.service ?? ''))
 const loadError = ref('')
 const loading = ref(true)
 const saving = ref(false)
 
-const originsText = ref('')
+const groups = ref<OfficeGroup[]>([])
+// 1 domain = 1 URL
+const originText = ref('')
 const hostApiBase = ref('')
 
-// ฟอร์ม modal สร้าง office / service
-const newOfficeOpen = ref(false)
+// ฟอร์ม modal เพิ่ม service (เพิ่ม domain ทำที่หน้าภาพรวม ในกลุ่มของมัน)
 const newServiceOpen = ref(false)
 const creating = ref(false)
-const officeForm = reactive({ id: '', label: '' })
 const serviceForm = reactive({ id: '', label: '' })
 
 const office = computed(() => offices.value.find((o) => o.id === officeId.value) ?? null)
@@ -37,9 +42,14 @@ const snippet = `<script src="${API_BASE}/widget/v1/ai-office.js" defer><\/scrip
 async function reload(keepService = true) {
   loadError.value = ''
   try {
-    const res = await listOffices()
+    const [res, g] = await Promise.all([listOffices(), listGroups()])
     offices.value = res.data
-    if (!office.value) officeId.value = res.data[0]?.id ?? ''
+    groups.value = g.data
+    if (!office.value) {
+      // ไม่มี office รหัสนี้ (ถูกลบไปแล้ว / พิมพ์ URL ผิด) — กลับหน้าภาพรวม
+      router.replace('/offices')
+      return
+    }
     syncForm(keepService)
   } catch (e) {
     loadError.value = (e as Error).message
@@ -50,12 +60,21 @@ async function reload(keepService = true) {
 
 function syncForm(keepService = true) {
   const o = office.value
-  originsText.value = o?.allowed_origins.join('\n') ?? ''
+  originText.value = o?.allowed_origins[0] ?? ''
   hostApiBase.value = o?.host_api_base ?? ''
   if (!keepService || !service.value) serviceId.value = o?.services[0]?.id ?? ''
 }
 
-watch(officeId, () => syncForm(false))
+watch(officeId, (id) => {
+  syncForm(false)
+  if (id && id !== route.params.id) router.replace(`/offices/${encodeURIComponent(id)}`)
+})
+watch(() => route.params.id, (id) => {
+  if (typeof id === 'string' && id && id !== officeId.value) officeId.value = id
+})
+watch(serviceId, (sid) => {
+  if (sid && sid !== route.query.service) router.replace({ query: { ...route.query, service: sid } })
+})
 
 function apply(updated: Office) {
   const i = offices.value.findIndex((o) => o.id === updated.id)
@@ -78,29 +97,14 @@ async function run(fn: () => Promise<Office | null>, okMsg: string): Promise<boo
   }
 }
 
-// ---------- office ----------
-function newOffice() {
-  officeForm.id = ''
-  officeForm.label = ''
-  newOfficeOpen.value = true
-}
-
-async function submitNewOffice() {
-  const id = officeForm.id.trim()
-  if (!id) return
-  creating.value = true
-  try {
-    const o = await createOffice(id, officeForm.label.trim())
-    apply(o)
-    officeId.value = o.id
-    newOfficeOpen.value = false
-    message.success(`สร้าง office ${o.id} แล้ว`)
-  } catch (e) {
-    message.error((e as Error).message)
-  } finally {
-    creating.value = false
-  }
-}
+// ตัวเลือก domain จัดหัวตามกลุ่ม · domain ที่ยังไม่มีกลุ่มอยู่ท้ายสุด
+const domainOptions = computed(() => {
+  const out = groups.value.map((g) => ({ label: g.name, items: offices.value.filter((o) => o.group_id === g.id) }))
+  const known = new Set(groups.value.map((g) => g.id))
+  const rest = offices.value.filter((o) => !o.group_id || !known.has(o.group_id))
+  if (rest.length) out.push({ label: 'ยังไม่ได้จัดกลุ่ม', items: rest })
+  return out.filter((g) => g.items.length)
+})
 
 async function saveOffice() {
   const o = office.value
@@ -113,10 +117,11 @@ async function saveOffice() {
         is_hidden: o.is_hidden,
         theme: o.theme,
         placement: o.placement,
-        allowed_origins: originsText.value.split('\n').map((s) => s.trim()).filter(Boolean),
+        allowed_origins: originText.value.trim() ? [originText.value.trim()] : [],
+        ...(o.group_id ? { group_id: o.group_id } : {}),
         host_api_base: hostApiBase.value.trim(),
       }),
-    'บันทึก office แล้ว',
+    'บันทึก domain แล้ว',
   )
   // server เก็บโดเมนในรูปแบบมาตรฐาน (ตัวพิมพ์เล็ก ไม่มี / ท้าย ตัดตัวซ้ำ) — โชว์ค่าที่เก็บจริง
   // ถ้าบันทึกไม่ผ่าน (เช่นโดเมนซ้ำกับ office อื่น) คงข้อความที่พิมพ์ไว้ให้แก้ต่อ
@@ -128,16 +133,15 @@ function confirmDeleteOffice() {
   if (!o) return
   Modal.confirm({
     centered: true,
-    title: `ลบ office "${o.label}" ?`,
-    content: `widget บนโดเมนของ officeลูกค้า เจ้านี้จะหยุดทำงานทันที และ service ทั้ง ${o.services.length} ตัวจะถูกลบไปด้วย`,
+    title: `ลบ domain "${o.label}" ?`,
+    content: `widget บน ${o.allowed_origins[0] ?? 'domain นี้'} จะหยุดทำงานทันที และ service ทั้ง ${o.services.length} ตัวจะถูกลบไปด้วย`,
     okText: 'ลบ',
     okType: 'danger',
     cancelText: 'ยกเลิก',
     async onOk() {
       await deleteOffice(o.id)
-      offices.value = offices.value.filter((x) => x.id !== o.id)
-      officeId.value = offices.value[0]?.id ?? ''
       message.success('ลบแล้ว')
+      router.push('/offices')
     },
   })
 }
@@ -192,7 +196,7 @@ function confirmDeleteService() {
   Modal.confirm({
     centered: true,
     title: `ลบ service "${s.label}" ?`,
-    content: 'แอดมินที่กำลังดู service นี้จะไม่เห็นปุ่ม AI อีก · snippet ของ office ไม่ต้องแก้',
+    content: 'แอดมินที่กำลังดู service นี้จะไม่เห็นปุ่ม AI อีก · snippet ไม่ต้องแก้',
     okText: 'ลบ',
     okType: 'danger',
     cancelText: 'ยกเลิก',
@@ -211,15 +215,16 @@ function copySnippet() {
     .catch(() => message.error('คัดลอกไม่ได้ — เลือกข้อความแล้วกด copy เอง'))
 }
 
-onMounted(() => reload(false))
+// keepService = true → คง service จาก ?service= ไว้ถ้ามีอยู่จริง ไม่งั้นเลือกตัวแรก
+onMounted(() => reload(true))
 </script>
 
 <template>
   <div class="page-head">
-    <h1>Offices</h1>
+    <RouterLink to="/offices" class="back">← หลังบ้านลูกค้าทั้งหมด</RouterLink>
+    <h1>ตั้งค่า domain</h1>
     <p class="sub">
-      แต่ละ office คือ officeลูกค้า 1 เจ้า — ระบุตัวด้วย<strong>โดเมน</strong>ที่เขาใช้
-      ข้างในมีได้หลาย service (แบรนด์) และแชทแยกตาม service
+      1 domain = หลังบ้าน 1 URL — มีการตั้งค่าหน้าตาของตัวเอง และมีได้หลาย service (แบรนด์) ที่แชทแยกกัน
     </p>
   </div>
 
@@ -230,75 +235,79 @@ onMounted(() => reload(false))
 
   <a-alert v-else-if="loadError" type="error" :message="loadError" show-icon style="margin-bottom: 16px" />
 
-  <!-- empty state — ยังไม่มี office -->
+  <!-- empty state — ยังไม่มี domain -->
   <div v-else-if="offices.length === 0" class="empty">
     <span class="empty-mark" aria-hidden="true">
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
         <path d="M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-4 3.5V17H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill="currentColor" />
       </svg>
     </span>
-    <h2>ยังไม่มี office</h2>
-    <p>สร้าง office แรกเพื่อเริ่มติดตั้ง widget ให้ลูกค้า</p>
-    <a-button type="primary" size="large" :disabled="!auth.can('office.edit')" @click="newOffice">สร้าง office</a-button>
+    <h2>ยังไม่มี domain</h2>
+    <p>สร้างกลุ่มและ domain แรกที่หน้าหลังบ้านลูกค้า</p>
+    <a-button type="primary" size="large" @click="router.push('/offices')">ไปหน้าหลังบ้านลูกค้า</a-button>
   </div>
 
   <div v-else class="cols">
     <div class="form">
       <a-card size="small" class="tidy" style="margin-bottom: 16px">
         <div class="row">
-          <a-select v-model:value="officeId" style="flex: 1" placeholder="เลือก office">
-            <a-select-option v-for="o in offices" :key="o.id" :value="o.id">
-              {{ o.label }} ({{ o.id }}) · {{ o.services.length }} service
-            </a-select-option>
+          <a-select v-model:value="officeId" show-search :filter-option="matchOption" style="flex: 1" placeholder="เลือก domain">
+            <a-select-opt-group v-for="g in domainOptions" :key="g.label" :label="g.label">
+              <a-select-option v-for="o in g.items" :key="o.id" :value="o.id" :search="`${g.label} ${o.id} ${o.label} ${o.allowed_origins[0] ?? ''}`">
+                {{ o.label }} · {{ o.allowed_origins[0] ?? 'ยังไม่ใส่ URL' }} · {{ o.services.length }} service
+              </a-select-option>
+            </a-select-opt-group>
           </a-select>
-          <a-button :disabled="!auth.can('office.edit')" @click="newOffice">สร้าง office</a-button>
         </div>
       </a-card>
 
       <template v-if="office">
-        <a-card size="small" class="tidy" title="Snippet สำหรับ officeลูกค้า" style="margin-bottom: 16px">
+        <a-card size="small" class="tidy" title="Snippet สำหรับหลังบ้านลูกค้า" style="margin-bottom: 16px">
           <pre class="snippet">{{ snippet }}</pre>
           <div class="row" style="margin-top: 12px">
             <a-button size="small" type="primary" @click="copySnippet">คัดลอก snippet</a-button>
           </div>
           <div class="hint">
-            <strong>ชุดเดียวใช้ได้ทุก office</strong> — แปะครั้งเดียวในโค้ดของ officeลูกค้า (เช่น <code>index.html</code> ของ office-v10x)
-            แล้ว deploy ไปกี่โดเมนก็ได้ · หลังบ้าน ai ดูจากโดเมนที่เปิดอยู่ว่าเป็น office ไหน
-            จึงต้องใส่ <strong>โดเมนที่อนุญาต</strong> ด้านล่างให้ครบ
+            <strong>ชุดเดียวใช้ได้ทุก domain</strong> — แปะครั้งเดียวในโค้ดของหลังบ้านลูกค้า (เช่น <code>index.html</code>)
+            แล้ว deploy ไปกี่ URL ก็ได้ · หลังบ้าน ai ดูจาก URL ที่เปิดอยู่ว่าเป็น domain ไหน
+            จึงต้องสร้าง domain ให้ครบทุก URL
           </div>
         </a-card>
 
-        <a-card size="small" class="tidy" title="ตั้งค่า office" style="margin-bottom: 16px">
+        <a-card size="small" class="tidy" title="ตั้งค่า domain" style="margin-bottom: 16px">
+          <label>กลุ่ม</label>
+          <a-select v-model:value="office.group_id" show-search :filter-option="matchOption" placeholder="เลือกกลุ่ม" style="width: 100%">
+            <a-select-option v-for="g in groups" :key="g.id" :value="g.id" :search="g.name">{{ g.name }}</a-select-option>
+          </a-select>
+
           <label>ชื่อที่แสดง</label>
           <a-input v-model:value="office.label" />
 
-          <label>โดเมนที่อนุญาต (บรรทัดละ 1 โดเมน)</label>
-          <a-textarea v-model:value="originsText" :rows="3" placeholder="https://demo-apex-dev-office.uppicture.online" />
+          <label>URL ของ domain</label>
+          <a-input v-model:value="originText" placeholder="เช่น https://office.example.com" allow-clear />
           <div class="hint">
-            <strong>ใช้ระบุว่าเป็น officeลูกค้า เจ้าไหน</strong> — widget ที่เปิดจากโดเมนเหล่านี้จะได้การตั้งค่าของ office นี้
-            <br />ใส่แค่ <code>https://โดเมน</code> ห้ามมี path · 1 โดเมนอยู่ได้แค่ office เดียว ·
-            <code>www.</code> กับไม่มี <code>www.</code> นับเป็นคนละโดเมน
+            <strong>ใช้ระบุว่า widget ที่เปิดอยู่เป็นของ domain ไหน</strong> — ใส่แค่ <code>https://โดเมน</code> ห้ามมี path ·
+            1 URL อยู่ได้แค่ domain เดียว · <code>www.</code> กับไม่มี <code>www.</code> นับเป็นคนละ URL (ต้องสร้างเป็น 2 domain)
           </div>
 
           <label>URL API หลังบ้าน (ไม่บังคับ)</label>
           <a-input v-model:value="hostApiBase" placeholder="https://demo-dev-office.example.com/api" allow-clear />
           <div class="hint">
-            ว่าง = widget ยิง API ที่ <code>&lt;โดเมนหน้าเว็บ&gt;/api</code> เอง (ใช้ได้กับ office ทุกโดเมน) ·
-            ใส่เฉพาะตอนที่ API อยู่คนละโดเมนกับหน้าเว็บ เช่น <strong>หน้า dev</strong> ที่รันบน localhost ·
-            ใส่แล้ว<strong>ทุกโดเมนของ office นี้</strong>จะยิงไปที่ URL นี้
+            ว่าง = widget ยิง API ที่ <code>&lt;URL ของ domain&gt;/api</code> เอง ·
+            ใส่เฉพาะตอนที่ API อยู่คนละที่กับหน้าเว็บ เช่น <strong>หน้า dev</strong> ที่รันบน localhost
           </div>
 
           <a-divider style="margin: 14px 0" />
 
           <a-switch v-model:checked="office.enabled" />
-          <span class="sw">เปิดใช้งาน office นี้</span>
-          <div class="hint"><strong>สวิตช์ฉุกเฉิน</strong> — ปิดแล้วทุก service ใน office นี้ปิดตามทันที</div>
+          <span class="sw">เปิดใช้งาน domain นี้</span>
+          <div class="hint"><strong>สวิตช์ฉุกเฉิน</strong> — ปิดแล้วทุก service ใน domain นี้ปิดตามทันที</div>
 
           <div style="margin-top: 12px">
             <a-switch v-model:checked="office.is_hidden" />
             <span class="sw">ซ่อนปุ่มลอย</span>
           </div>
-          <div class="hint">widget ยังโหลดแต่ไม่มีปุ่ม — ให้ officeลูกค้า เรียกเองด้วย <code>window.__aiOffice.open()</code></div>
+          <div class="hint">widget ยังโหลดแต่ไม่มีปุ่ม — ให้หลังบ้านลูกค้าเรียกเองด้วย <code>window.__aiOffice.open()</code></div>
 
           <label>ธีม</label>
           <a-radio-group v-model:value="office.theme" button-style="solid">
@@ -318,7 +327,7 @@ onMounted(() => reload(false))
           <label>ระยะจากขอบล่าง — {{ office.placement.offset_y }} px</label>
           <a-slider v-model:value="office.placement.offset_y" :min="0" :max="200" />
           <div class="hint">
-            อยู่ระดับ office เพราะทุก service เปิดในหน้า officeลูกค้า เดียวกัน — ถ้าให้ต่างกันรายแบรนด์ ปุ่มจะเด้งไปมาตอนสลับ service
+            อยู่ระดับ domain เพราะทุก service เปิดในหน้าหลังบ้านเดียวกัน — ถ้าให้ต่างกันรายแบรนด์ ปุ่มจะเด้งไปมาตอนสลับ service
           </div>
 
           <div class="row" style="margin-top: 14px">
@@ -332,8 +341,8 @@ onMounted(() => reload(false))
 
         <a-card size="small" class="tidy" title="Services" style="margin-bottom: 16px">
           <div class="row">
-            <a-select v-model:value="serviceId" style="flex: 1" placeholder="ยังไม่มี service">
-              <a-select-option v-for="s in office.services" :key="s.id" :value="s.id">
+            <a-select v-model:value="serviceId" show-search :filter-option="matchOption" style="flex: 1" placeholder="ยังไม่มี service">
+              <a-select-option v-for="s in office.services" :key="s.id" :value="s.id" :search="`${s.id} ${s.label}`">
                 {{ s.label }} ({{ s.id }}) {{ s.enabled ? '· เปิด' : '· ปิด' }}
               </a-select-option>
             </a-select>
@@ -365,7 +374,7 @@ onMounted(() => reload(false))
             <span class="sw">เปิดใช้งาน service นี้</span>
 
             <div class="hint">
-              แอดมินที่ล็อกอิน officeลูกค้า สำเร็จ + มีสิทธิ์ service นี้ (<code>list_service</code> ใน token) จะเห็นปุ่ม AI ได้เลย
+              แอดมินที่ล็อกอิน หลังบ้านลูกค้าสำเร็จ + มีสิทธิ์ service นี้ (<code>list_service</code> ใน token) จะเห็นปุ่ม AI ได้เลย
               — ไม่ต้องกำหนดรายชื่อ
             </div>
 
@@ -382,30 +391,6 @@ onMounted(() => reload(false))
     <WidgetPreview v-if="office" :key="office.id" :office="office" :service="service" />
   </div>
 
-  <!-- สร้าง office -->
-  <a-modal centered
-    v-model:open="newOfficeOpen"
-    title="เพิ่ม office"
-    :width="440"
-    :confirm-loading="creating"
-    ok-text="สร้าง office"
-    cancel-text="ยกเลิก"
-    :ok-button-props="{ disabled: !officeForm.id.trim() }"
-    @ok="submitNewOffice"
-  >
-    <p class="modal-intro">office คือ officeลูกค้า 1 เจ้า — สร้างแล้วใส่โดเมนของเขาใน "โดเมนที่อนุญาต" ต่อ</p>
-    <div class="field">
-      <label>รหัส office</label>
-      <a-input v-model:value="officeForm.id" placeholder="เช่น acme" @keyup.enter="submitNewOffice" />
-      <span class="fhint">ตัวอักษร ตัวเลข - _ · ใช้อ้างอิงใน officeai และข้อมูลแชท ลูกค้าไม่เห็น — ตั้งให้จำง่าย เปลี่ยนภายหลังไม่ได้</span>
-    </div>
-    <div class="field">
-      <label>ชื่อที่แสดง <span class="opt">— ไม่บังคับ</span></label>
-      <a-input v-model:value="officeForm.label" placeholder="เช่น Acme Thailand" @keyup.enter="submitNewOffice" />
-      <span class="fhint">ชื่อที่เห็นในคอนโซล เว้นว่างได้ จะใช้รหัสแทน</span>
-    </div>
-  </a-modal>
-
   <!-- เพิ่ม service -->
   <a-modal centered
     v-model:open="newServiceOpen"
@@ -417,21 +402,23 @@ onMounted(() => reload(false))
     :ok-button-props="{ disabled: !serviceForm.id.trim() }"
     @ok="submitNewService"
   >
-    <p class="modal-intro">service = แบรนด์หรือเว็บย่อยใต้ office นี้ · สลับดูได้โดยไม่ต้องแก้ snippet</p>
+    <p class="modal-intro">service = แบรนด์หรือเว็บย่อยใต้ domain นี้ · สลับดูได้โดยไม่ต้องแก้ snippet</p>
     <div class="field">
       <label>รหัส service</label>
-      <a-input v-model:value="serviceForm.id" placeholder="เช่น K11S" @keyup.enter="submitNewService" />
-      <span class="fhint">ต้องตรงกับ <code>localStorage["web-service"]</code> ของ officeลูกค้า ตอนแอดมินเลือกเว็บนั้น</span>
+      <a-input v-model:value="serviceForm.id" placeholder="เช่น EXAMPLE" @keyup.enter="submitNewService" />
+      <span class="fhint">ต้องตรงกับ <code>localStorage["web-service"]</code> ของหลังบ้านลูกค้าตอนแอดมินเลือกเว็บนั้น</span>
     </div>
     <div class="field">
       <label>ชื่อที่แสดง <span class="opt">— ไม่บังคับ</span></label>
-      <a-input v-model:value="serviceForm.label" placeholder="เช่น เว็บ K11S" @keyup.enter="submitNewService" />
+      <a-input v-model:value="serviceForm.label" placeholder="เช่น เว็บ Example" @keyup.enter="submitNewService" />
       <span class="fhint">ชื่อที่เห็นในคอนโซล</span>
     </div>
   </a-modal>
 </template>
 
 <style scoped>
+.back { display: inline-block; font-size: 13px; color: var(--accent); text-decoration: none; margin-bottom: 8px; }
+.back:hover { text-decoration: underline; }
 .cols { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 24px; align-items: start; }
 @media (max-width: 1100px) { .cols { grid-template-columns: minmax(0, 1fr); } }
 .row { display: flex; gap: 8px; align-items: center; }
@@ -449,7 +436,7 @@ code { font-family: var(--font-mono); font-size: 11.5px; }
 
 .empty-inline { margin: 12px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
 
-/* empty state — ยังไม่มี office */
+/* empty state — ยังไม่มี domain */
 .empty {
   display: flex; flex-direction: column; align-items: center; text-align: center;
   gap: 6px; max-width: 460px; margin: 8px auto; padding: 48px 32px;

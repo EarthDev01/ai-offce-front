@@ -94,6 +94,22 @@
 }
 
 @layer components {
+  /* แถบตัวกรองมาตรฐาน — ใส่ในการ์ด: grid มีป้ายเหนือทุกช่อง · แถวล่าง = ล้างตัวกรอง / รีเฟรช
+     เปลี่ยนตัวกรองแล้วค้นทันที ไม่มีปุ่ม "ค้นหา" กลางแถว */
+  .filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 12px; }
+  .filter-grid .span-2 { grid-column: span 2; }
+  .f-label { display: block; font-size: 12.5px; color: var(--muted); margin: 4px 0 4px; }
+  .f-hint { opacity: 0.75; }
+  .filter-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .filter-foot .grow { flex: 1; }
+  .filter-foot .f-count { font-size: 13px; color: var(--muted); }
+  @media (min-width: 1600px) {
+    .filter-grid.wide { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  }
+  @media (max-width: 860px) {
+    .filter-grid { grid-template-columns: 1fr 1fr; }
+  }
+
   /* หัวเรื่องหน้า — h1 + คำบรรยายสั้น (ความยาวบรรทัด < 80ch สำหรับ prose) */
   .page-head {
     margin-bottom: 24px;

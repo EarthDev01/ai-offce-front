@@ -3,11 +3,14 @@
 
 export const CATEGORY_META: Record<string, { label: string; color: string }> = {
   auth: { label: 'เข้าสู่ระบบ', color: 'geekblue' },
-  office: { label: 'Office', color: 'cyan' },
+  group: { label: 'กลุ่ม', color: 'green' },
+  office: { label: 'Domain', color: 'cyan' },
   service: { label: 'Service', color: 'blue' },
   user: { label: 'ผู้ใช้', color: 'purple' },
   role: { label: 'Role / สิทธิ์', color: 'gold' },
   access: { label: 'ถูกปฏิเสธสิทธิ์', color: 'volcano' },
+  settings: { label: 'ตั้งค่าระบบ', color: 'lime' },
+  deletion: { label: 'ลบตามคำขอ', color: 'red' },
 }
 
 export const ACTION_LABELS: Record<string, string> = {
@@ -20,9 +23,13 @@ export const ACTION_LABELS: Record<string, string> = {
   'auth.logout': 'ออกจากระบบ',
   'auth.password_changed': 'เปลี่ยนรหัสผ่าน',
 
-  'office.create': 'สร้าง office',
-  'office.update': 'แก้ไข office',
-  'office.delete': 'ลบ office',
+  'group.create': 'สร้างกลุ่ม',
+  'group.update': 'เปลี่ยนชื่อกลุ่ม',
+  'group.delete': 'ลบกลุ่ม',
+
+  'office.create': 'สร้าง domain',
+  'office.update': 'แก้ไข domain',
+  'office.delete': 'ลบ domain',
   'office.rotate_key': 'เปลี่ยน public key (เลิกใช้แล้ว)',
 
   'service.create': 'เพิ่ม service',
@@ -41,6 +48,9 @@ export const ACTION_LABELS: Record<string, string> = {
   'role.permissions_update': 'แก้สิทธิ์ของ role',
 
   'access.denied': 'ถูกปฏิเสธสิทธิ์',
+
+  'settings.update': 'แก้ตั้งค่าระบบ',
+  'deletion.request': 'ลบข้อมูลแชทตามคำขอ',
 }
 
 // action ไหนเป็นการ "สร้าง / แก้ / ลบ" — ใช้ทำไอคอนนำหน้า
@@ -60,10 +70,24 @@ const COMMON_FIELDS: Record<string, string> = {
 }
 
 const FIELD_LABELS: Record<string, Record<string, string>> = {
+  settings: {
+    max_concurrent: 'คนถามพร้อมกันต่อ service',
+    ticket_ttl_min: 'อายุตั๋วแชท (นาที)',
+    support_message: 'ช่องทางติดต่อ support',
+    llm_timeout_sec: 'เวลารอ LLM รอบเลือกเครื่องมือ (วิ)',
+    stream_timeout_sec: 'เวลารอ LLM รอบเขียนคำตอบ (วิ)',
+    max_output_tokens: 'ความยาวคำตอบสูงสุด (token)',
+    history_turns: 'ประวัติที่ส่งให้ LLM (รอบ)',
+    tool_timeout_ms: 'เวลารอหลังบ้านต่อเส้น (ms)',
+  },
+  group: {
+    name: 'ชื่อกลุ่ม',
+  },
   office: {
-    allowed_origins: 'โดเมนที่อนุญาต',
+    group_id: 'กลุ่ม',
+    allowed_origins: 'URL ของ domain',
     host_api_base: 'URL API หลังบ้าน',
-    backoffice_api_url: 'URL API officeลูกค้า',
+    backoffice_api_url: 'URL API หลังบ้านลูกค้า',
     use_real_token: 'ใช้ token จริง',
     enabled: 'สวิตช์ฉุกเฉิน (เปิดใช้งาน)',
     is_hidden: 'ซ่อนปุ่มลอย',
@@ -90,11 +114,17 @@ export function fieldLabel(targetType: string, field: string) {
 }
 
 export const PERMISSION_LABELS: Record<string, string> = {
-  'office.view': 'ดู office/service',
-  'office.edit': 'สร้าง/แก้ office และ service',
-  'office.delete': 'ลบ office/service',
+  'office.view': 'ดูกลุ่ม domain และ service',
+  'office.edit': 'สร้าง/แก้ กลุ่ม domain และ service',
+  'office.delete': 'ลบ กลุ่ม domain และ service',
   'user.manage': 'จัดการผู้ใช้ และตั้งสิทธิ์ role',
   'audit.view': 'ดูประวัติการทำงาน',
+  'conversation.read': 'อ่านประวัติแชท',
+  'verification.write': 'ตรวจคำตอบ',
+  'usage.view': 'ดูการใช้งาน token',
+  'deletion.manage': 'ลบข้อมูลแชทตามคำขอ',
+  'settings.manage': 'แก้ตั้งค่าระบบ',
+  'accesslog.view': 'ดูบันทึกการเข้าถึงข้อมูลแชท',
 }
 
 export const REASON_LABELS: Record<string, string> = {
@@ -118,6 +148,9 @@ export const META_LABELS: Record<string, string> = {
   permission: 'สิทธิ์ที่ขาด',
   display_name: 'ชื่อที่แสดง',
   role: 'บทบาท',
+  request_id: 'เลขคำขอลบ',
+  service_id: 'service',
+  user: 'ผู้ใช้',
 }
 
 const STATUS_VALUE: Record<string, string> = { active: 'ใช้งาน', disabled: 'ปิด' }

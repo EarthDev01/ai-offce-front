@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import ConsoleLayout from '@/layouts/ConsoleLayout.vue'
+import OfficesOverview from '@/views/offices/OfficesOverview.vue'
 import OfficesView from '@/views/offices/OfficesView.vue'
 import { useAuthStore } from '@/stores/auth'
 import { authStatus } from '@/services/api/auth'
@@ -11,6 +12,8 @@ declare module 'vue-router' {
     public?: boolean
     requiresConsoleAuth?: boolean
     perm?: PermissionKey
+    /** เข้าได้ถ้ามีสิทธิ์ข้อใดข้อหนึ่ง (หน้าที่มีหลายแท็บ แต่ละแท็บใช้สิทธิ์ต่างกัน) */
+    anyPerm?: PermissionKey[]
   }
 }
 
@@ -19,6 +22,12 @@ const SetupView = () => import('@/views/auth/SetupView.vue')
 const UsersView = () => import('@/views/users/UsersView.vue')
 const RolePermissionsView = () => import('@/views/roles/RolePermissionsView.vue')
 const AuditLogView = () => import('@/views/audit/AuditLogView.vue')
+const OverviewView = () => import('@/views/overview/OverviewView.vue')
+const HistoryView = () => import('@/views/history/HistoryView.vue')
+const ReviewView = () => import('@/views/review/ReviewView.vue')
+const UsageView = () => import('@/views/usage/UsageView.vue')
+const DeletionView = () => import('@/views/deletion/DeletionView.vue')
+const SettingsView = () => import('@/views/settings/SettingsView.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -29,8 +38,16 @@ const router = createRouter({
       path: '/',
       component: ConsoleLayout,
       children: [
-        { path: '', redirect: '/offices' },
-        { path: 'offices', name: 'offices', component: OfficesView, meta: { requiresConsoleAuth: true } },
+        // หน้าแรกหลัง login = ภาพรวม · ไม่มีสิทธิ์ usage.view ด่านข้างล่างพาไป /offices เอง
+        { path: '', redirect: '/overview' },
+        {
+          path: 'overview',
+          name: 'overview',
+          component: OverviewView,
+          meta: { requiresConsoleAuth: true, perm: 'usage.view' },
+        },
+        { path: 'offices', name: 'offices', component: OfficesOverview, meta: { requiresConsoleAuth: true } },
+        { path: 'offices/:id', name: 'office', component: OfficesView, meta: { requiresConsoleAuth: true } },
         {
           path: 'users',
           name: 'users',
@@ -49,7 +66,36 @@ const router = createRouter({
           component: AuditLogView,
           meta: { requiresConsoleAuth: true, perm: 'audit.view' },
         },
-        // overview / history / review / quota — Phase 5
+        {
+          path: 'history',
+          name: 'history',
+          component: HistoryView,
+          meta: { requiresConsoleAuth: true, perm: 'conversation.read' },
+        },
+        {
+          path: 'review',
+          name: 'review',
+          component: ReviewView,
+          meta: { requiresConsoleAuth: true, perm: 'verification.write' },
+        },
+        {
+          path: 'usage',
+          name: 'usage',
+          component: UsageView,
+          meta: { requiresConsoleAuth: true, perm: 'usage.view' },
+        },
+        {
+          path: 'deletion',
+          name: 'deletion',
+          component: DeletionView,
+          meta: { requiresConsoleAuth: true, anyPerm: ['deletion.manage', 'accesslog.view'] },
+        },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: SettingsView,
+          meta: { requiresConsoleAuth: true, perm: 'office.view' },
+        },
       ],
     },
   ],
@@ -86,7 +132,7 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (to.meta.perm && !auth.can(to.meta.perm)) {
+  if ((to.meta.perm && !auth.can(to.meta.perm)) || (to.meta.anyPerm && !to.meta.anyPerm.some((p) => auth.can(p)))) {
     return to.path === '/offices' ? true : { path: '/offices' }
   }
 

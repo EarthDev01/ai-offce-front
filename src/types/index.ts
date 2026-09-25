@@ -26,6 +26,8 @@ export interface Office {
   allowed_origins: string[]
   /** URL API หลังบ้านที่ widget ของ office นี้ยิง · ว่าง = <โดเมนหน้าเว็บ>/api */
   host_api_base?: string
+  /** กลุ่มที่ domain นี้อยู่ · ว่าง = ยังไม่ได้จัดกลุ่ม */
+  group_id?: string
   enabled: boolean
   is_hidden: boolean
   theme: ThemeMode
@@ -37,7 +39,7 @@ export interface Office {
 }
 
 export type OfficePatch = Partial<
-  Pick<Office, 'label' | 'allowed_origins' | 'host_api_base' | 'enabled' | 'is_hidden' | 'theme' | 'placement'>
+  Pick<Office, 'label' | 'allowed_origins' | 'host_api_base' | 'group_id' | 'enabled' | 'is_hidden' | 'theme' | 'placement'>
 >
 
 export type ServicePatch = Partial<
@@ -49,4 +51,212 @@ export interface ApiResponse<T> {
   message: string
   error: string
   payload: T
+}
+
+// ---- ประวัติแชท / ตรวจคำตอบ (ดู domain/chat.go ใน ai-office-backend) ----
+
+/** การ์ดที่ระบบสร้างจากผล API หลังบ้าน — ค่าจริงอยู่ที่นี่ ไม่ได้มาจาก LLM */
+export interface ChatCard {
+  id: string
+  kind: 'ok' | 'not_found' | 'error' | 'denied' | 'reference'
+  tool: string
+  title: string
+  fields: { label: string; display: string }[] | null
+  table?: { columns: { label: string }[]; rows: { display: string }[][] }
+  note?: string
+  fetched_at: string
+  link?: { label: string; path: string }
+  cached?: boolean
+}
+
+/** บันทึกการเรียก tool 1 ครั้ง — endpoint เป็น template ไม่ใช่ค่าจริง */
+export interface ToolCall {
+  tool: string
+  endpoint: string
+  method: string
+  status: number
+  ms: number
+  ok: boolean
+  cached: boolean
+  error?: string
+}
+
+export type VerificationStatus = 'pending' | 'correct' | 'wrong'
+
+export interface Conversation {
+  id: string
+  office_id: string
+  service_id: string
+  admin_id: string
+  username: string
+  title: string
+  message_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessage {
+  id: string
+  conversation_id: string
+  office_id: string
+  service_id: string
+  role: 'user' | 'assistant'
+  text: string
+  cards?: ChatCard[]
+  tool_calls?: ToolCall[]
+  usage: { input_tokens: number; output_tokens: number }
+  first_token_ms?: number
+  guard_hits?: number
+  category?: string
+  status?: 'ok' | 'aborted' | 'error'
+  verification_status?: VerificationStatus
+  created_at: string
+}
+
+export interface Verification {
+  id: string
+  message_id: string
+  status: 'correct' | 'wrong'
+  error_type?: string
+  correct_answer?: string
+  note?: string
+  verified_by: string
+  verified_at: string
+}
+
+export interface ConversationView {
+  conversation: Conversation
+  messages: ChatMessage[]
+  verifications: Record<string, Verification>
+}
+
+export interface ConversationFilter {
+  office_id?: string
+  service_id?: string
+  user?: string
+  q?: string
+  verification?: VerificationStatus
+  from?: string
+  to?: string
+  limit?: number
+  offset?: number
+}
+
+export interface QueueItem {
+  question: string
+  answer: ChatMessage
+}
+
+export interface VerificationStats {
+  correct: number
+  wrong: number
+  pending: number
+  verified: number
+  total: number
+  percent_correct: number
+  basis: string
+}
+
+export interface VerifyInput {
+  message_id: string
+  status: 'correct' | 'wrong'
+  error_type?: string
+  correct_answer?: string
+  note?: string
+}
+
+// ---- ตั้งค่าระบบ / การใช้ token / ลบตามคำขอ (ดู domain/settings.go, usage.go, deletion.go) ----
+
+export interface Settings {
+  max_concurrent: number
+  ticket_ttl_min: number
+  support_message: string
+  llm_timeout_sec: number
+  stream_timeout_sec: number
+  max_output_tokens: number
+  history_turns: number
+  tool_timeout_ms: number
+  updated_at: string
+  updated_by: string
+}
+
+export type SettingsPatch = Partial<Omit<Settings, 'updated_at' | 'updated_by'>> & { updated_at: string }
+
+export interface SettingsView {
+  settings: Settings
+  ranges: Record<string, [number, number]>
+  llm: { provider: string; model: string; enabled: boolean }
+}
+
+export interface UsagePeriod {
+  id: string
+  office_id: string
+  service_id: string
+  period: string
+  questions: number
+  input_tokens: number
+  output_tokens: number
+  cache_read: number
+  cache_write: number
+  updated_at: string
+}
+
+export interface DailyRollup {
+  id: string
+  office_id: string
+  service_id: string
+  date: string
+  conversations: number
+  questions: number
+  input_tokens: number
+  output_tokens: number
+  cache_read: number
+  cache_write: number
+  refusals: number
+  tool_errors: number
+  guard_hits: number
+  correct: number
+  wrong: number
+}
+
+export interface DeletionRequest {
+  id: string
+  scope: { office_id: string; service_id?: string; user?: string; from?: string; to?: string }
+  reason: string
+  requested_by: string
+  status: 'running' | 'done' | 'failed'
+  result: { messages: number; conversations: number; verifications: number }
+  error?: string
+  created_at: string
+  completed_at?: string
+}
+
+export interface DeletionInput {
+  office_id: string
+  service_id?: string
+  user?: string
+  from?: string
+  to?: string
+  reason: string
+}
+
+export interface AccessLog {
+  id: string
+  operator: string
+  action: string
+  office_id?: string
+  service_id?: string
+  conversation_id?: string
+  message_id?: string
+  detail?: string
+  at: string
+}
+
+/** หัวกลุ่มของ domain (ตั้งชื่อเอง) — ลำดับชั้น: กลุ่ม → domain (Office) → service */
+export interface OfficeGroup {
+  id: string
+  name: string
+  created_at: string
+  updated_at: string
+  updated_by: string
 }

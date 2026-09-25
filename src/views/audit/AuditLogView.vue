@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQuery } from 'vue-router'
-import type { Dayjs } from 'dayjs'
 import { listAuditActors, listAuditLogs } from '@/services/api/audit'
 import AuditValue from '@/components/AuditValue.vue'
+import DateRangeFilter from '@/components/DateRangeFilter.vue'
 import {
   ACTION_LABELS, CATEGORY_META, META_LABELS, REASON_LABELS, actionVerb, fieldLabel,
 } from '@/utils/auditLabels'
@@ -41,11 +41,6 @@ function ymd(d: Date) {
 function addDays(day: string, n: number) {
   const [y, m, d] = day.split('-').map(Number)
   return ymd(new Date(y, m - 1, d + n))
-}
-function daysBetween(a: string, b: string) {
-  const [ay, am, ad] = a.split('-').map(Number)
-  const [by, bm, bd] = b.split('-').map(Number)
-  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000)
 }
 function defaultRange() {
   const to = ymd(new Date())
@@ -86,21 +81,6 @@ const dateRange = computed<[string, string] | undefined>({
     filters.to = d.to
   },
 })
-
-// วันแรกที่คลิกระหว่างเลือกช่วง — ใช้ปิดวันที่ห่างเกิน RANGE_MAX_DAYS
-const pickingFrom = ref<string | null>(null)
-
-function onCalendarChange(v: [unknown, unknown] | null) {
-  const first = v?.[0] ?? v?.[1]
-  pickingFrom.value = !first ? null : typeof first === 'string' ? first : (first as Dayjs).format('YYYY-MM-DD')
-}
-
-function disabledDate(current: Dayjs) {
-  const day = current.format('YYYY-MM-DD')
-  if (day > ymd(new Date())) return true // ยังไม่มีประวัติในอนาคต
-  if (!pickingFrom.value) return false
-  return Math.abs(daysBetween(pickingFrom.value, day)) > RANGE_MAX_DAYS - 1
-}
 
 function pushQuery(resetPage = true) {
   if (resetPage) filters.page = 1
@@ -174,6 +154,14 @@ async function reload() {
   } finally {
     if (my === seq) loading.value = false
   }
+}
+
+// ปุ่มรีเฟรชหมุนเฉพาะตอนกดเอง — เปลี่ยนหน้าตาราง/ตัวกรองหมุนแค่ที่ตาราง ปุ่มไม่ขยับ
+const refreshing = ref(false)
+async function refresh() {
+  refreshing.value = true
+  await reload()
+  refreshing.value = false
 }
 
 async function loadActors() {
@@ -338,7 +326,7 @@ const VERB_ICON: Record<string, string> = {
   </div>
 
   <a-card size="small" class="tidy filters">
-    <div class="filter-grid">
+    <div class="filter-grid wide">
       <div>
         <label class="f-label">ผู้ใช้</label>
         <a-select
@@ -384,17 +372,7 @@ const VERB_ICON: Record<string, string> = {
       </div>
       <div class="span-2">
         <label class="f-label">ช่วงวันที่ <span class="f-hint">(สูงสุด 2 เดือน)</span></label>
-        <a-range-picker
-          v-model:value="dateRange"
-          value-format="YYYY-MM-DD"
-          format="DD/MM/YYYY"
-          :placeholder="['ตั้งแต่', 'ถึง']"
-          :disabled-date="disabledDate"
-          style="width: 100%"
-          @calendar-change="onCalendarChange"
-          @open-change="(open: boolean) => { if (!open) pickingFrom = null }"
-          @change="pushQuery()"
-        />
+        <DateRangeFilter v-model="dateRange" :max-days="RANGE_MAX_DAYS" @change="pushQuery()" />
       </div>
       <div class="span-2">
         <label class="f-label">ค้นหา</label>
@@ -413,7 +391,7 @@ const VERB_ICON: Record<string, string> = {
       </span>
       <span class="grow" />
       <a-button v-if="hasFilter" size="small" @click="resetFilters">ล้างตัวกรอง</a-button>
-      <a-button size="small" :loading="loading" @click="reload">รีเฟรช</a-button>
+      <a-button size="small" :loading="refreshing" @click="refresh">รีเฟรช</a-button>
     </div>
   </a-card>
 
@@ -551,12 +529,6 @@ const VERB_ICON: Record<string, string> = {
 <style scoped>
 .tidy { border-radius: var(--r-card); border-color: var(--line); }
 .filters { margin-bottom: 16px; }
-.filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 12px; }
-.span-2 { grid-column: span 2; }
-.f-label { display: block; font-size: 12.5px; color: var(--muted); margin: 4px 0 4px; }
-.f-hint { opacity: 0.75; }
-.filter-foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
-.grow { flex: 1; }
 .target-chip { font-size: 13px; color: var(--muted); background: var(--accent-soft); padding: 2px 10px; border-radius: var(--r-tag); }
 .target-chip b { color: var(--accent-strong); }
 .target-chip a { margin-left: 8px; }
@@ -623,14 +595,7 @@ const VERB_ICON: Record<string, string> = {
 .empty-title { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--ink); }
 .empty-sub { margin: 0; font-size: 13px; color: var(--muted); }
 
-/* จอกว้าง: ตัวกรองทั้งหมดอยู่แถวเดียว (4 dropdown + ช่วงวันที่ 2 ช่อง + ค้นหา 2 ช่อง = 8) */
-@media (min-width: 1600px) {
-  .filter-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
-}
-
 @media (max-width: 860px) {
-  .filter-grid { grid-template-columns: 1fr 1fr; }
-  .span-2 { grid-column: span 2; }
   .kv { grid-template-columns: 110px 1fr; }
   .diff .field { width: auto; }
 }

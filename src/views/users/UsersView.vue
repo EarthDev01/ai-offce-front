@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { matchOption } from '@/utils/selectSearch'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import {
@@ -291,14 +292,14 @@ onMounted(() => {
     @ok="submitCreate"
   >
     <label class="f-label">username</label>
-    <a-input v-model:value="createForm.username" placeholder="เช่น adm_ploy" />
+    <a-input v-model:value="createForm.username" placeholder="เช่น example_admin" />
 
     <label class="f-label">ชื่อที่แสดง</label>
     <a-input v-model:value="createForm.display_name" />
 
     <label class="f-label">บทบาท</label>
-    <a-select v-model:value="createForm.role" style="width: 100%">
-      <a-select-option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
+    <a-select v-model:value="createForm.role" show-search :filter-option="matchOption" style="width: 100%">
+      <a-select-option v-for="opt in roleOptions" :key="opt.value" :value="opt.value" :search="`${opt.label} ${opt.value}`">{{ opt.label }}</a-select-option>
     </a-select>
 
     <label class="f-label">รหัสผ่าน (อย่างน้อย 8 ตัว)</label>
@@ -318,8 +319,8 @@ onMounted(() => {
     <a-input v-model:value="editForm.display_name" />
 
     <label class="f-label">บทบาท</label>
-    <a-select v-model:value="editForm.role" style="width: 100%">
-      <a-select-option v-for="opt in roleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</a-select-option>
+    <a-select v-model:value="editForm.role" show-search :filter-option="matchOption" style="width: 100%">
+      <a-select-option v-for="opt in roleOptions" :key="opt.value" :value="opt.value" :search="`${opt.label} ${opt.value}`">{{ opt.label }}</a-select-option>
     </a-select>
 
     <label class="f-label">สถานะ</label>

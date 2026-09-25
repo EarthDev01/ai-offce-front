@@ -36,7 +36,7 @@ const modalOpen = computed({
 
 onMounted(async () => {
   if (auth.isAuthed) {
-    router.replace('/offices')
+    router.replace('/')
     return
   }
   auth.pending = null
@@ -77,7 +77,7 @@ async function submitRegister() {
 }
 
 function goNext() {
-  router.replace('/offices')
+  router.replace('/')
 }
 
 function resetToForm() {

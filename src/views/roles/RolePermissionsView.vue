@@ -2,8 +2,9 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import {
-  getRolePermissions, saveRolePermissions, createRole, renameRole, deleteRole,
+  getRolePermissions, saveRolePermissions, createRole, renameRole, deleteRole, listUsers,
 } from '@/services/api/auth'
+import { PERM_GROUPS } from '@/utils/permissionGroups'
 import { useAuthStore } from '@/stores/auth'
 import { authErrorCode, authErrorText } from '@/utils/authErrors'
 import type { PermissionKey, RoleDef, RolePermissionMatrix } from '@/services/api/types'
@@ -18,28 +19,97 @@ const catalog = ref<{ key: PermissionKey; label: string }[]>([])
 const roles = ref<RoleDef[]>([])
 const matrix = reactive<RolePermissionMatrix>({})
 
-// server บังคับ admin ต้องมี user.manage เสมอ (กันล็อกตัวเองออกจากระบบ)
-function isLocked(roleKey: string, perm: PermissionKey) {
-  return roleKey === 'admin' && perm === 'user.manage'
-}
+// matrix ตามที่ server ส่งมาล่าสุด — ใช้เทียบว่าแก้อะไรไปแล้วบ้างก่อนบันทึก
+const saved = reactive<RolePermissionMatrix>({})
+// จำนวนผู้ใช้ต่อ role (โหลดไม่ได้ก็ไม่แสดง)
+const userCount = ref<Record<string, number>>({})
+
+// admin ได้ทุกสิทธิ์เสมอ (server ไม่เช็ค matrix ของ admin) — แสดงติ๊กครบแบบล็อก
+const isAdmin = (roleKey: string) => roleKey === 'admin'
 
 function has(roleKey: string, perm: PermissionKey) {
-  return isLocked(roleKey, perm) ? true : (matrix[roleKey] ?? []).includes(perm)
+  return isAdmin(roleKey) || (matrix[roleKey] ?? []).includes(perm)
+}
+
+function wasSaved(roleKey: string, perm: PermissionKey) {
+  return isAdmin(roleKey) || (saved[roleKey] ?? []).includes(perm)
+}
+
+function isChanged(roleKey: string, perm: PermissionKey) {
+  return has(roleKey, perm) !== wasSaved(roleKey, perm)
 }
 
 function toggle(roleKey: string, perm: PermissionKey, checked: boolean) {
-  if (isLocked(roleKey, perm)) return
+  if (isAdmin(roleKey)) return
   const list = matrix[roleKey] ?? (matrix[roleKey] = [])
   const idx = list.indexOf(perm)
   if (checked && idx === -1) list.push(perm)
   else if (!checked && idx !== -1) list.splice(idx, 1)
 }
 
+// จัดสิทธิ์ตามหมวด · สิทธิ์ที่ server มีแต่ยังไม่อยู่ในหมวดไหน ไปอยู่ "อื่น ๆ" (ไม่หายไปเงียบ ๆ)
+const labelOf = computed(() => {
+  const m: Record<string, string> = {}
+  for (const c of catalog.value) m[c.key] = c.label
+  return m
+})
+
+const groups = computed(() => {
+  const known = new Set(Object.keys(labelOf.value))
+  const used = new Set<string>()
+  const out = PERM_GROUPS.map((g) => ({
+    title: g.title,
+    items: g.items.filter((it) => known.has(it.key)).map((it) => {
+      used.add(it.key)
+      return { key: it.key, label: labelOf.value[it.key], opens: it.opens }
+    }),
+  })).filter((g) => g.items.length > 0)
+  const rest = [...known].filter((k) => !used.has(k))
+  if (rest.length) {
+    out.push({ title: 'อื่น ๆ', items: rest.map((k) => ({ key: k as PermissionKey, label: labelOf.value[k], opens: '' })) })
+  }
+  return out
+})
+
+// ติ๊กทั้งหมวด: all = ครบทุกข้อ · some = บางข้อ
+function groupState(roleKey: string, keys: PermissionKey[]) {
+  const n = keys.filter((k) => has(roleKey, k)).length
+  return { all: n === keys.length, some: n > 0 && n < keys.length }
+}
+
+function toggleGroup(roleKey: string, keys: PermissionKey[], checked: boolean) {
+  for (const k of keys) toggle(roleKey, k, checked)
+}
+
+const changedCount = computed(() => {
+  let n = 0
+  for (const r of roles.value) {
+    for (const g of groups.value) for (const it of g.items) if (isChanged(r.key, it.key)) n++
+  }
+  return n
+})
+
+function resetEdits() {
+  Object.keys(matrix).forEach((k) => delete matrix[k])
+  Object.entries(saved).forEach(([k, v]) => { matrix[k] = [...v] })
+}
+
 function applyPayload(res: { roles: RoleDef[]; matrix: RolePermissionMatrix; catalog: { key: PermissionKey; label: string }[] }) {
   roles.value = res.roles
   catalog.value = res.catalog
-  Object.keys(matrix).forEach((k) => delete matrix[k])
-  Object.entries(res.matrix).forEach(([k, v]) => { matrix[k] = [...v] })
+  Object.keys(saved).forEach((k) => delete saved[k])
+  Object.entries(res.matrix).forEach(([k, v]) => { saved[k] = [...v] })
+  resetEdits()
+}
+
+async function loadUserCount() {
+  try {
+    const counts: Record<string, number> = {}
+    for (const u of (await listUsers()).users) counts[u.role] = (counts[u.role] ?? 0) + 1
+    userCount.value = counts
+  } catch {
+    /* ไม่แสดงจำนวนผู้ใช้ */
+  }
 }
 
 async function reload() {
@@ -60,6 +130,8 @@ async function submit() {
   try {
     const plain: RolePermissionMatrix = {}
     Object.entries(matrix).forEach(([k, v]) => { plain[k] = [...v] })
+    // admin ได้ทุกสิทธิ์อยู่แล้ว — เก็บให้ครบตาม catalog ให้ข้อมูลใน DB ตรงกับความจริง
+    plain.admin = [...new Set(catalog.value.map((c) => c.key))]
     const res = await saveRolePermissions(plain)
     applyPayload(res)
     message.success('บันทึกสิทธิ์แล้ว')
@@ -161,15 +233,18 @@ async function confirmDeleteRole(role: RoleDef) {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  reload()
+  loadUserCount()
+})
 </script>
 
 <template>
   <div class="page-head">
     <h1>สิทธิ์ของ role</h1>
     <p class="sub">
-      กำหนดว่าแต่ละ role ทำอะไรได้บ้าง — ติ๊กเพื่อเปิด/ปิดสิทธิ์รายอย่าง แล้วกดบันทึกเพื่อมีผลทันที
-      เพิ่ม/แก้ไข/ลบ role ได้จากที่นี่เช่นกัน
+      กำหนดว่าแต่ละ role เห็นเมนูและทำอะไรได้บ้าง — คลิกช่องเพื่อเปิด/ปิดสิทธิ์ หรือติ๊กที่หัวหมวดเพื่อให้ทั้งหมวด
+      แล้วกดบันทึก · ผู้ใช้เห็นผลเมื่อโหลดหน้าใหม่
     </p>
   </div>
 
@@ -181,19 +256,24 @@ onMounted(reload)
       <a-button @click="openAdd">เพิ่ม role</a-button>
     </div>
 
-    <div class="table-scroll" v-if="!loading || catalog.length">
+    <div v-if="!loading || catalog.length" class="table-scroll">
       <table class="perm-table">
         <thead>
           <tr>
-            <th class="perm-col">สิทธิ์</th>
+            <th class="perm-col">สิทธิ์ · เปิดอะไรได้</th>
             <th v-for="r in roles" :key="r.key" class="role-col">
               <div class="role-head">
                 <div class="role-head-title">
                   <span>{{ r.label }}</span>
                   <a-tag v-if="r.builtin" color="#0f6e63" class="builtin-badge">ระบบ</a-tag>
                 </div>
-                <div v-if="!r.builtin" class="role-head-actions">
-                  <a-button size="small" type="link" @click="openRename(r)">แก้ไข</a-button>
+                <div class="role-meta">
+                  <code>{{ r.key }}</code>
+                  <template v-if="userCount[r.key] !== undefined"> · {{ userCount[r.key] }} ผู้ใช้</template>
+                </div>
+                <div v-if="isAdmin(r.key)" class="role-meta">ได้ทุกสิทธิ์เสมอ</div>
+                <div v-else-if="!r.builtin" class="role-head-actions">
+                  <a-button size="small" type="link" @click="openRename(r)">แก้ชื่อ</a-button>
                   <a-popconfirm
                     title="ลบ role นี้? user ที่ใช้ role นี้อยู่ต้องย้ายไป role อื่นก่อน"
                     ok-text="ลบ"
@@ -204,24 +284,42 @@ onMounted(reload)
                     <a-button size="small" type="link" danger>ลบ</a-button>
                   </a-popconfirm>
                 </div>
-                <div v-else class="role-head-actions lock-hint">ล็อกไว้ แก้ไข/ลบไม่ได้</div>
               </div>
             </th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-for="item in catalog" :key="item.key">
+        <tbody v-for="g in groups" :key="g.title">
+          <tr class="group-row">
+            <td class="perm-col">{{ g.title }}</td>
+            <td v-for="r in roles" :key="r.key" class="cell">
+              <a-tooltip v-if="!isAdmin(r.key)" :title="`${groupState(r.key, g.items.map((i) => i.key)).all ? 'เอาออก' : 'ให้'}ทุกสิทธิ์ในหมวด ${g.title}`">
+                <a-checkbox
+                  :checked="groupState(r.key, g.items.map((i) => i.key)).all"
+                  :indeterminate="groupState(r.key, g.items.map((i) => i.key)).some"
+                  @change="(e: any) => toggleGroup(r.key, g.items.map((i) => i.key), e.target.checked)"
+                />
+              </a-tooltip>
+            </td>
+          </tr>
+          <tr v-for="item in g.items" :key="item.key">
             <td class="perm-col">
               <span class="perm-label">{{ item.label }}</span>
+              <span v-if="item.opens" class="perm-opens">{{ item.opens }}</span>
               <span class="perm-key">{{ item.key }}</span>
             </td>
-            <td v-for="r in roles" :key="r.key" class="cell">
+            <td
+              v-for="r in roles"
+              :key="r.key"
+              class="cell"
+              :class="{ changed: isChanged(r.key, item.key), clickable: !isAdmin(r.key) }"
+              @click="!isAdmin(r.key) && toggle(r.key, item.key, !has(r.key, item.key))"
+            >
               <a-checkbox
                 :checked="has(r.key, item.key)"
-                :disabled="isLocked(r.key, item.key)"
+                :disabled="isAdmin(r.key)"
+                @click.stop
                 @change="(e: any) => toggle(r.key, item.key, e.target.checked)"
               />
-              <div v-if="isLocked(r.key, item.key)" class="lock-note">บังคับเปิด — กันแอดมินล็อกตัวเองออก</div>
             </td>
           </tr>
         </tbody>
@@ -229,11 +327,15 @@ onMounted(reload)
     </div>
 
     <a-skeleton v-else active :paragraph="{ rows: 5 }" />
-
-    <div class="footer-row">
-      <a-button type="primary" :loading="saving" :disabled="loading" @click="submit">บันทึกสิทธิ์</a-button>
-    </div>
   </a-card>
+
+  <div v-if="changedCount > 0" class="save-bar">
+    <span><strong>เปลี่ยน {{ changedCount }} รายการ</strong> · ยังไม่บันทึก (ช่องที่แก้มีพื้นสีเหลือง)</span>
+    <div class="save-actions">
+      <a-button :disabled="saving" @click="resetEdits">ยกเลิกการแก้ไข</a-button>
+      <a-button type="primary" :loading="saving" @click="submit">บันทึกสิทธิ์</a-button>
+    </div>
+  </div>
 
   <!-- เพิ่ม role -->
   <a-modal centered
@@ -275,28 +377,38 @@ onMounted(reload)
 .count { font-size: 13px; color: var(--muted); }
 
 .table-scroll { overflow-x: auto; }
-
 .perm-table { width: 100%; border-collapse: collapse; }
-.perm-table th, .perm-table td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: center; }
-.perm-table th { background: var(--ground); color: var(--muted); font-weight: 600; font-size: 12.5px; vertical-align: top; }
+.perm-table th, .perm-table td { padding: 10px 14px; border-bottom: 1px solid var(--line); text-align: center; }
+.perm-table th { background: var(--ground); color: var(--muted); font-weight: 600; font-size: 12.5px; vertical-align: top; position: sticky; top: 0; z-index: 1; }
 .perm-table thead th.perm-col, .perm-table td.perm-col { text-align: left; }
-.perm-table tbody tr:last-child td { border-bottom: none; }
 
-.perm-col { min-width: 220px; }
-.role-col { min-width: 160px; }
+.perm-col { min-width: 280px; }
+.role-col { min-width: 150px; }
 .perm-label { display: block; font-size: 14px; color: var(--ink); font-weight: 600; }
-.perm-key { display: block; font-size: 12px; color: var(--muted); font-family: var(--font-mono, monospace); margin-top: 2px; }
+.perm-opens { display: block; font-size: 12.5px; color: var(--ink); opacity: .72; margin-top: 2px; }
+.perm-key { display: block; font-size: 11px; color: var(--muted); font-family: var(--font-mono, monospace); margin-top: 2px; }
 
-.role-head { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.role-head-title { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.group-row td { background: var(--ground); font-size: 12px; font-weight: 700; letter-spacing: .03em; color: var(--muted); padding-top: 14px; }
+.group-row td.perm-col { text-transform: uppercase; }
+
+.role-head { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.role-head-title { display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink); }
+.role-meta { font-size: 11.5px; font-weight: 400; color: var(--muted); }
 .builtin-badge { font-size: 11px; line-height: 16px; padding: 0 6px; }
-.role-head-actions { display: flex; gap: 0; }
-.role-head-actions.lock-hint { font-size: 11px; color: var(--muted); font-weight: 400; }
+.role-head-actions { display: flex; }
 
-.cell { position: relative; }
-.lock-note { margin-top: 4px; font-size: 11px; color: var(--muted); line-height: 1.3; max-width: 140px; margin-inline: auto; }
+.cell.clickable { cursor: pointer; }
+.cell.clickable:hover { background: var(--accent-soft); }
+.cell.changed { background: #fff4d6; }
+.cell.changed:hover { background: #ffecb3; }
 
-.footer-row { display: flex; justify-content: flex-end; margin-top: 20px; }
+.save-bar {
+  position: sticky; bottom: 16px; margin-top: 16px; z-index: 5;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r-card);
+  background: var(--surface); box-shadow: 0 6px 20px rgba(19, 40, 43, .12); font-size: 13.5px;
+}
+.save-actions { display: flex; gap: 8px; }
 
 .f-label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 4px; }
 .f-hint { margin: 4px 0 0; font-size: 12px; color: var(--muted); line-height: 1.4; }

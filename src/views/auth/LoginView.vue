@@ -37,7 +37,7 @@ const modalTitle = computed(() =>
 
 onMounted(() => {
   if (auth.isAuthed) {
-    router.replace('/offices')
+    router.replace('/')
     return
   }
   // เริ่มที่ Phase A เสมอ — ล้าง state ค้างจากรอบก่อน
@@ -48,7 +48,7 @@ function goNext() {
   // กัน open-redirect: รับเฉพาะ path เดียวกัน origin (ขึ้นต้น '/' แต่ไม่ใช่ '//' ซึ่งเป็น protocol-relative URL)
   const r = route.query.redirect
   const isSafePath = typeof r === 'string' && r.startsWith('/') && !r.startsWith('//')
-  router.replace(isSafePath ? r : '/offices')
+  router.replace(isSafePath ? r : '/')
 }
 
 async function submitCredentials() {

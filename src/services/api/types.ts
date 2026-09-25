@@ -7,6 +7,12 @@ export type PermissionKey =
   | 'office.delete'
   | 'user.manage'
   | 'audit.view'
+  | 'conversation.read'
+  | 'verification.write'
+  | 'usage.view'
+  | 'deletion.manage'
+  | 'settings.manage'
+  | 'accesslog.view'
 
 export interface RoleDef {
   key: string
