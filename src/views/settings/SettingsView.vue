@@ -44,10 +44,38 @@ function openKey(p: LLMProvider, mode: 'set' | 'delete') {
   keyOpen.value = true
 }
 
+// Base URL ที่เติมให้ในหน้าต่างตั้ง key: ค่าที่กรอกอยู่ → ค่าที่เคยกรอกของ provider นั้น → ค่าล่าสุดที่เคยบันทึก
+const keyBaseUrl = computed(() => {
+  const id = keyProvider.value?.id
+  if (!id) return undefined
+  if (id === form.llm.provider) return form.llm.base_url
+  return drafts[id]?.base_url || view.value?.settings.llm_recent?.[id]?.base_url || undefined
+})
+
 function keyTitle(p: LLMProvider) {
   const k = p.key
   if (!k?.updated_by) return ''
   return `ตั้งโดย ${k.updated_by} · ${fmt(k.updated_at)}`
+}
+
+// ตั้ง key เสร็จ — Base URL ที่กรอกในหน้าต่างใช้ต่อในการ์ดโมเดลเลย ไม่ต้องกรอกซ้ำ
+function onKeyDone(baseUrl?: string) {
+  const id = keyProvider.value?.id
+  if (id && baseUrl) {
+    if (form.llm.provider === id) {
+      if (form.llm.base_url !== baseUrl) {
+        form.llm.base_url = baseUrl
+        message.info('ใส่ Base URL ในการ์ดโมเดลให้แล้ว — กด "บันทึกตั้งค่าระบบ" เพื่อใช้กับแชท')
+      }
+    } else {
+      const p = providers.value.find((x) => x.id === id)
+      const base = drafts[id] ?? view.value?.settings.llm_recent?.[id] ?? {
+        provider: id, model: p?.models[0] ?? '', effort: p?.efforts?.length ? 'low' : '', base_url: '',
+      }
+      drafts[id] = { ...base, base_url: baseUrl }
+    }
+  }
+  refreshKeys()
 }
 
 // โหลดสถานะ key ใหม่ โดยไม่ทับค่าที่กำลังแก้อยู่ในฟอร์ม
@@ -108,6 +136,26 @@ const numberFields: { key: keyof Settings; label: string; hint: string; unit: st
 
 function range(key: string): [number, number] {
   return view.value?.ranges[key] ?? [0, 999999]
+}
+
+// จำนวน field ที่แก้แต่ยังไม่บันทึก = เทียบฟอร์มกับค่าล่าสุดจาก server (เฉพาะ field ที่แก้ได้)
+const LLM_FIELDS = ['provider', 'model', 'effort', 'base_url'] as const
+const changedCount = computed(() => {
+  const saved = view.value?.settings
+  if (!saved || !canEdit.value) return 0
+  let n = numberFields.filter((f) => form[f.key] !== saved[f.key]).length
+  if (form.support_message !== saved.support_message) n++
+  n += LLM_FIELDS.filter((k) => form.llm[k] !== saved.llm[k]).length
+  return n
+})
+
+// ยกเลิกการแก้ = กลับไปค่าที่โหลดไว้ ไม่ยิง server
+function discard() {
+  if (!view.value) return
+  Object.assign(form, view.value.settings, { llm: { ...view.value.settings.llm } })
+  for (const k of Object.keys(drafts)) delete drafts[k]
+  testResult.value = null
+  testError.value = ''
 }
 
 async function reload() {
@@ -309,8 +357,8 @@ onMounted(reload)
       :provider="keyProvider"
       :mode="keyMode"
       :test-model="keyProvider?.id === form.llm.provider ? form.llm.model : undefined"
-      :test-base-url="keyProvider?.id === form.llm.provider ? form.llm.base_url : undefined"
-      @done="refreshKeys"
+      :test-base-url="keyBaseUrl"
+      @done="onKeyDone"
     />
 
     <a-card size="small" class="tidy" title="ประสิทธิภาพ" style="margin-bottom: 16px">
@@ -336,10 +384,15 @@ onMounted(reload)
       <div class="hint">ผู้ช่วยบอกข้อความนี้เมื่อตอบไม่ได้หรือผู้ใช้ถามซ้ำ · ใช้เมื่อ connector ของหลังบ้านนั้นไม่ได้ตั้งไว้เอง</div>
     </a-card>
 
-    <div class="actions">
-      <a-button v-if="canEdit" type="primary" :loading="saving" @click="save">บันทึกตั้งค่าระบบ</a-button>
-      <a-button @click="reload">โหลดค่าล่าสุด</a-button>
-      <span class="hint">แก้ล่าสุดโดย {{ form.updated_by || '—' }} · {{ fmt(form.updated_at) }}</span>
+    <p class="hint last-edit">แก้ล่าสุดโดย {{ form.updated_by || '—' }} · {{ fmt(form.updated_at) }}</p>
+
+    <!-- ปุ่มบันทึกลอยอยู่ล่างจอ เฉพาะตอนมีค่าที่ยังไม่บันทึก -->
+    <div v-if="changedCount > 0" class="save-bar">
+      <span><strong>เปลี่ยน {{ changedCount }} รายการ</strong> · ยังไม่บันทึก</span>
+      <div class="save-actions">
+        <a-button :disabled="saving" @click="discard">ยกเลิกการแก้ไข</a-button>
+        <a-button type="primary" :loading="saving" @click="save">บันทึกตั้งค่าระบบ</a-button>
+      </div>
     </div>
   </a-spin>
 </template>
@@ -409,5 +462,12 @@ onMounted(reload)
 .field > label, .ant-card-body > label { display: flex; align-items: center; font-size: 13px; margin-bottom: 4px; }
 .effort { display: flex; width: 100%; }
 .effort :deep(.ant-radio-button-wrapper) { flex: 1; text-align: center; }
-.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.last-edit { margin: 4px 0 0; }
+.save-bar {
+  position: sticky; bottom: 16px; margin-top: 16px; z-index: 5;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r-card);
+  background: var(--surface); box-shadow: 0 6px 20px rgba(19, 40, 43, .12); font-size: 13.5px;
+}
+.save-actions { display: flex; gap: 8px; }
 </style>

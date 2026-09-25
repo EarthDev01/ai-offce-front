@@ -1,4 +1,4 @@
-// role เป็น string ธรรมดา — admin เพิ่ม/ลบ/เปลี่ยนชื่อ role ได้จากหน้า "สิทธิ์ของ role" (ไม่ hardcode ชุด literal อีกต่อไป)
+// role เป็น string ธรรมดา — admin เพิ่ม/ลบ/เปลี่ยนชื่อ role ได้จากหน้า "ตั้งค่า Permissions" (ไม่ hardcode ชุด literal อีกต่อไป)
 export type Role = string
 
 export type PermissionKey =

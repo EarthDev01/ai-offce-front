@@ -1,6 +1,6 @@
 import type { PermissionKey } from '@/services/api/types'
 
-// หมวดเดียวกันทั้งเมนูซ้ายและหน้าสิทธิ์ของ role — แก้ที่นี่ที่เดียว
+// หมวดเดียวกันทั้งเมนูซ้ายและหน้าตั้งค่า Permissions — แก้ที่นี่ที่เดียว
 
 export interface NavItem {
   to: string
@@ -36,7 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: 'ผู้ดูแลระบบ',
     items: [
       { to: '/users', label: 'ผู้ใช้คอนโซล', icon: 'users', perms: ['user.manage'] },
-      { to: '/roles', label: 'สิทธิ์ของ role', icon: 'roles', perms: ['user.manage'] },
+      { to: '/roles', label: 'ตั้งค่า Permissions', icon: 'roles', perms: ['user.manage'] },
       { to: '/activity', label: 'ประวัติการทำงาน', icon: 'activity', perms: ['audit.view'] },
       { to: '/settings', label: 'ตั้งค่าระบบ', icon: 'settings', perms: ['office.view'] },
     ],
@@ -45,7 +45,7 @@ export const NAV_GROUPS: NavGroup[] = [
 
 export const SOON_ITEMS: string[] = []
 
-/** สิทธิ์ 1 ข้อบนหน้าสิทธิ์ของ role — opens บอกว่าเปิดเมนู/ปุ่มอะไร */
+/** สิทธิ์ 1 ข้อบนหน้าตั้งค่า Permissions — opens บอกว่าเปิดเมนู/ปุ่มอะไร */
 export interface PermItem {
   key: PermissionKey
   opens: string
@@ -83,7 +83,7 @@ export const PERM_GROUPS: PermGroup[] = [
   {
     title: 'ผู้ดูแลระบบ',
     items: [
-      { key: 'user.manage', opens: 'เมนูผู้ใช้คอนโซล และหน้านี้ (สิทธิ์ของ role)' },
+      { key: 'user.manage', opens: 'เมนูผู้ใช้คอนโซล และหน้านี้ (ตั้งค่า Permissions)' },
       { key: 'audit.view', opens: 'เมนูประวัติการทำงาน' },
       { key: 'settings.manage', opens: 'แก้ค่าในหน้าตั้งค่าระบบ' },
       { key: 'llm.key.manage', opens: 'ตั้ง/เปลี่ยน/ลบ API key ของโมเดล AI (ยืนยัน 2FA ทุกครั้ง)' },
