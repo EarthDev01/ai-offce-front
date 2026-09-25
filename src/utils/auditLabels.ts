@@ -62,6 +62,7 @@ const COMMON_FIELDS: Record<string, string> = {
 const FIELD_LABELS: Record<string, Record<string, string>> = {
   office: {
     allowed_origins: 'โดเมนที่อนุญาต',
+    host_api_base: 'URL API หลังบ้าน',
     backoffice_api_url: 'URL API officeลูกค้า',
     use_real_token: 'ใช้ token จริง',
     enabled: 'สวิตช์ฉุกเฉิน (เปิดใช้งาน)',

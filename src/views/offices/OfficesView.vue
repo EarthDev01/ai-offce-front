@@ -19,6 +19,7 @@ const loading = ref(true)
 const saving = ref(false)
 
 const originsText = ref('')
+const hostApiBase = ref('')
 
 // ฟอร์ม modal สร้าง office / service
 const newOfficeOpen = ref(false)
@@ -50,6 +51,7 @@ async function reload(keepService = true) {
 function syncForm(keepService = true) {
   const o = office.value
   originsText.value = o?.allowed_origins.join('\n') ?? ''
+  hostApiBase.value = o?.host_api_base ?? ''
   if (!keepService || !service.value) serviceId.value = o?.services[0]?.id ?? ''
 }
 
@@ -112,6 +114,7 @@ async function saveOffice() {
         theme: o.theme,
         placement: o.placement,
         allowed_origins: originsText.value.split('\n').map((s) => s.trim()).filter(Boolean),
+        host_api_base: hostApiBase.value.trim(),
       }),
     'บันทึก office แล้ว',
   )
@@ -275,6 +278,14 @@ onMounted(() => reload(false))
             <strong>ใช้ระบุว่าเป็น officeลูกค้า เจ้าไหน</strong> — widget ที่เปิดจากโดเมนเหล่านี้จะได้การตั้งค่าของ office นี้
             <br />ใส่แค่ <code>https://โดเมน</code> ห้ามมี path · 1 โดเมนอยู่ได้แค่ office เดียว ·
             <code>www.</code> กับไม่มี <code>www.</code> นับเป็นคนละโดเมน
+          </div>
+
+          <label>URL API หลังบ้าน (ไม่บังคับ)</label>
+          <a-input v-model:value="hostApiBase" placeholder="https://demo-dev-office.example.com/api" allow-clear />
+          <div class="hint">
+            ว่าง = widget ยิง API ที่ <code>&lt;โดเมนหน้าเว็บ&gt;/api</code> เอง (ใช้ได้กับ office ทุกโดเมน) ·
+            ใส่เฉพาะตอนที่ API อยู่คนละโดเมนกับหน้าเว็บ เช่น <strong>หน้า dev</strong> ที่รันบน localhost ·
+            ใส่แล้ว<strong>ทุกโดเมนของ office นี้</strong>จะยิงไปที่ URL นี้
           </div>
 
           <a-divider style="margin: 14px 0" />

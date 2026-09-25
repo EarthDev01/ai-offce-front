@@ -24,6 +24,8 @@ export interface Office {
   label: string
   public_key: string
   allowed_origins: string[]
+  /** URL API หลังบ้านที่ widget ของ office นี้ยิง · ว่าง = <โดเมนหน้าเว็บ>/api */
+  host_api_base?: string
   enabled: boolean
   is_hidden: boolean
   theme: ThemeMode
@@ -35,7 +37,7 @@ export interface Office {
 }
 
 export type OfficePatch = Partial<
-  Pick<Office, 'label' | 'allowed_origins' | 'enabled' | 'is_hidden' | 'theme' | 'placement'>
+  Pick<Office, 'label' | 'allowed_origins' | 'host_api_base' | 'enabled' | 'is_hidden' | 'theme' | 'placement'>
 >
 
 export type ServicePatch = Partial<
