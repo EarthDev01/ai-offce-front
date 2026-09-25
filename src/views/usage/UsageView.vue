@@ -4,6 +4,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { listOffices } from '@/services/api/offices'
 import DomainSelect from '@/components/DomainSelect.vue'
 import { listRollups, listUsage } from '@/services/api/ops'
+import { customerUsageOnly } from '@/utils/usage'
 import type { Dayjs } from 'dayjs'
 import DateRangeFilter from '@/components/DateRangeFilter.vue'
 import type { DailyRollup, Office, UsagePeriod } from '@/types'
@@ -41,7 +42,7 @@ async function loadUsage() {
   try {
     const res = await listUsage(period.value || undefined)
     period.value = res.period
-    usage.value = res.data
+    usage.value = customerUsageOnly(res.data)
   } catch (e) {
     usageError.value = (e as Error).message
   } finally {
@@ -75,9 +76,8 @@ async function loadRollups() {
   rollLoading.value = true
   rollError.value = ''
   try {
-    rollups.value = (
-      await listRollups({ office_id: filter.office_id, service_id: filter.service_id, from: filter.range?.[0], to: filter.range?.[1] })
-    ).data
+    const res = await listRollups({ office_id: filter.office_id, service_id: filter.service_id, from: filter.range?.[0], to: filter.range?.[1] })
+    rollups.value = customerUsageOnly(res.data)
   } catch (e) {
     rollError.value = (e as Error).message
   } finally {

@@ -3,6 +3,7 @@ import { matchOption } from '@/utils/selectSearch'
 import { computed, onMounted, ref, watch } from 'vue'
 import { listOffices } from '@/services/api/offices'
 import { listRollups } from '@/services/api/ops'
+import { customerUsageOnly } from '@/utils/usage'
 import { verificationStats } from '@/services/api/chats'
 import { useAuthStore } from '@/stores/auth'
 import StackedBarChart, { type Series } from '@/components/charts/StackedBarChart.vue'
@@ -45,7 +46,9 @@ async function load() {
   loadError.value = ''
   const [o, s] = svc.value === 'ALL' ? [undefined, undefined] : [officeOf(svc.value), serviceOf(svc.value)]
   try {
-    rollups.value = (await listRollups({ office_id: o, service_id: s, from: dayList.value[0], to: dayList.value[dayList.value.length - 1] })).data
+    rollups.value = customerUsageOnly(
+      (await listRollups({ office_id: o, service_id: s, from: dayList.value[0], to: dayList.value[dayList.value.length - 1] })).data,
+    )
   } catch (e) {
     loadError.value = (e as Error).message
   } finally {

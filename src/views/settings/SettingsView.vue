@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { ASSISTANT_CHANGED } from '@/services/api/assistant'
 import { getSettings, patchSettings, testLLM } from '@/services/api/ops'
 import { useAuthStore } from '@/stores/auth'
 import InfoTip from '@/components/InfoTip.vue'
@@ -16,7 +17,7 @@ const loadError = ref('')
 const view = ref<SettingsView | null>(null)
 const form = reactive<Settings>({
   max_concurrent: 5, ticket_ttl_min: 30, support_message: '', llm_timeout_sec: 25, stream_timeout_sec: 60,
-  max_output_tokens: 1024, history_turns: 10, tool_timeout_ms: 20000,
+  max_output_tokens: 1024, history_turns: 10, tool_timeout_ms: 20000, assistant_enabled: false,
   llm: { provider: 'anthropic', model: '', effort: 'low', base_url: '' },
   updated_at: '', updated_by: '',
 })
@@ -145,6 +146,7 @@ const changedCount = computed(() => {
   if (!saved || !canEdit.value) return 0
   let n = numberFields.filter((f) => form[f.key] !== saved[f.key]).length
   if (form.support_message !== saved.support_message) n++
+  if (form.assistant_enabled !== !!saved.assistant_enabled) n++
   n += LLM_FIELDS.filter((k) => form.llm[k] !== saved.llm[k]).length
   return n
 })
@@ -186,6 +188,7 @@ async function save() {
       view.value.settings = saved
       view.value.llm_ready = !!providers.value.find((p) => p.id === saved.llm.provider)?.has_key
     }
+    window.dispatchEvent(new Event(ASSISTANT_CHANGED)) // ให้ปุ่มผู้ช่วยโชว์/ซ่อนตามค่าใหม่ทันที
     message.success('บันทึกตั้งค่าระบบแล้ว')
   } catch (e) {
     // 409 = มีคนแก้ไปก่อน · 400 = ค่านอกช่วง — ข้อความจาก server บอกรายละเอียดแล้ว
@@ -378,6 +381,18 @@ onMounted(reload)
       </div>
     </a-card>
 
+    <a-card size="small" class="tidy" title="ผู้ช่วย AI ในคอนโซล" style="margin-bottom: 16px">
+      <a-switch v-model:checked="form.assistant_enabled" :disabled="!canEdit" />
+      <span class="sw">เปิดปุ่มผู้ช่วยมุมขวาล่างของคอนโซล</span>
+      <InfoTip>
+        ให้ทุกคนที่ล็อกอินถามวิธีใช้คอนโซลและข้อมูลในระบบได้ · อ่านอย่างเดียว เห็นตามสิทธิ์ของคนถาม<br />
+        ใช้โมเดลเดียวกับด้านบน และใช้ token จริงทุกคำถาม (ระบบเก็บตัวเลขไว้ แต่ไม่แสดงในภาพรวมและการใช้งาน token)
+      </InfoTip>
+      <div v-if="form.assistant_enabled && view && !view.llm_ready" class="hint warn-text">
+        โมเดลที่บันทึกไว้ยังไม่มี API key — ปุ่มจะยังไม่ขึ้นจนกว่าจะตั้ง key
+      </div>
+    </a-card>
+
     <a-card size="small" class="tidy" title="ข้อความ" style="margin-bottom: 16px">
       <label>ช่องทางติดต่อ support</label>
       <a-textarea v-model:value="form.support_message" :rows="2" :disabled="!canEdit" />
@@ -398,6 +413,8 @@ onMounted(reload)
 </template>
 
 <style scoped>
+.sw { margin-left: 8px; font-size: 14px; }
+.warn-text { color: var(--danger); margin-top: 8px; }
 .tidy { border-radius: var(--r-card); border-color: var(--line); }
 .hint { font-size: 12px; color: var(--muted); }
 

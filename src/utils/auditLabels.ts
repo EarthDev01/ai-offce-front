@@ -83,6 +83,7 @@ const FIELD_LABELS: Record<string, Record<string, string>> = {
     max_output_tokens: 'ความยาวคำตอบสูงสุด (token)',
     history_turns: 'ประวัติที่ส่งให้ LLM (รอบ)',
     tool_timeout_ms: 'เวลารอหลังบ้านต่อเส้น (ms)',
+    assistant_enabled: 'ผู้ช่วย AI ในคอนโซล',
     'llm.provider': 'LLM provider',
     'llm.model': 'โมเดล AI',
     'llm.effort': 'effort ของโมเดล',
