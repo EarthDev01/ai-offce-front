@@ -4,18 +4,16 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { listOffices } from '@/services/api/offices'
 import DomainSelect from '@/components/DomainSelect.vue'
 import { listRollups, listUsage } from '@/services/api/ops'
+import { customerUsageOnly } from '@/utils/usage'
 import type { Dayjs } from 'dayjs'
 import DateRangeFilter from '@/components/DateRangeFilter.vue'
 import type { DailyRollup, Office, UsagePeriod } from '@/types'
 
 const offices = ref<Office[]>([])
-// token ของผู้ช่วย AI ในคอนโซลนับแยกไว้ใต้รหัสนี้ (ไม่ใช่ domain ของลูกค้า)
-const CONSOLE_USAGE = '_console'
 const nf = new Intl.NumberFormat('th-TH')
 const n = (v: number) => nf.format(v ?? 0)
 
 function labelOf(officeID: string, serviceID: string) {
-  if (officeID === CONSOLE_USAGE) return 'ผู้ช่วยคอนโซล'
   const o = offices.value.find((x) => x.id === officeID)
   const s = o?.services.find((x) => x.id === serviceID)
   return `${o?.label ?? officeID} / ${s?.label ?? serviceID}`
@@ -44,7 +42,7 @@ async function loadUsage() {
   try {
     const res = await listUsage(period.value || undefined)
     period.value = res.period
-    usage.value = res.data
+    usage.value = customerUsageOnly(res.data)
   } catch (e) {
     usageError.value = (e as Error).message
   } finally {
@@ -78,9 +76,8 @@ async function loadRollups() {
   rollLoading.value = true
   rollError.value = ''
   try {
-    rollups.value = (
-      await listRollups({ office_id: filter.office_id, service_id: filter.service_id, from: filter.range?.[0], to: filter.range?.[1] })
-    ).data
+    const res = await listRollups({ office_id: filter.office_id, service_id: filter.service_id, from: filter.range?.[0], to: filter.range?.[1] })
+    rollups.value = customerUsageOnly(res.data)
   } catch (e) {
     rollError.value = (e as Error).message
   } finally {
