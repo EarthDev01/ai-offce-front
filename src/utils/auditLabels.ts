@@ -96,11 +96,13 @@ const FIELD_LABELS: Record<string, Record<string, string>> = {
     group_id: 'กลุ่ม',
     allowed_origins: 'URL ของ domain',
     host_api_base: 'URL API หลังบ้าน',
+    kind: 'ชนิดหลังบ้าน',
     backoffice_api_url: 'URL API หลังบ้านลูกค้า',
     use_real_token: 'ใช้ token จริง',
     enabled: 'สวิตช์ฉุกเฉิน (เปิดใช้งาน)',
     is_hidden: 'ซ่อนปุ่มลอย',
     theme: 'ธีม',
+    accent_color: 'สีหลักของ widget',
     placement: 'ตำแหน่งปุ่มลอย',
   },
   service: {

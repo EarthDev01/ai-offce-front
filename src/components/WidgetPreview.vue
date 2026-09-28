@@ -24,6 +24,7 @@ function pushConfig() {
     service_label: props.service?.label ?? '',
     // หน้าตาระดับ office (เหมือนกันทุก service เพราะเป็นหลังบ้านชุดเดียวกัน)
     theme: props.office.theme,
+    accent_color: props.office.accent_color ?? '',
     placement: { position: p.position, offset_x: p.offset_x, offset_y: p.offset_y },
     is_hidden: props.office.is_hidden,
   }
@@ -62,7 +63,7 @@ watch(() => [props.office, props.service], pushConfig, { deep: true })
       <div id="widget-preview" class="box"></div>
     </div>
     <div class="foot">
-      ชื่อ คำทักทาย และรูป มาจาก <strong>service</strong> — ตำแหน่งและธีมมาจาก <strong>office</strong>
+      ชื่อ คำทักทาย และรูป มาจาก <strong>service</strong> — ตำแหน่ง ธีม และสีมาจาก <strong>office</strong>
     </div>
   </div>
 </template>
