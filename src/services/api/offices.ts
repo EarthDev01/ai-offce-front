@@ -31,6 +31,14 @@ export const patchService = (officeID: string, serviceID: string, patch: Service
 export const removeService = (officeID: string, serviceID: string) =>
   request<Office>(`${base}/${enc(officeID)}/services/${enc(serviceID)}`, { method: 'DELETE' })
 
+/** ชนิดหลังบ้านที่ backend มี connector · default = ชนิดที่ใช้กับ domain ที่ยังไม่ได้เลือก */
+export interface OfficeKind {
+  kind: string
+  label: string
+  default: boolean
+}
+export const listKinds = () => request<OfficeKind[]>('/api/ai/admin/kinds')
+
 // ---- กลุ่มของ domain ----
 const groupsBase = '/api/ai/admin/groups'
 

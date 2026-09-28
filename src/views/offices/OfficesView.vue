@@ -4,8 +4,9 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
-  listOffices, listGroups, patchOffice, deleteOffice,
+  listOffices, listGroups, listKinds, patchOffice, deleteOffice,
   addService, patchService, removeService,
+  type OfficeKind,
 } from '@/services/api/offices'
 import { API_BASE } from '@/services/api/client'
 import WidgetPreview from '@/components/WidgetPreview.vue'
@@ -24,6 +25,9 @@ const loading = ref(true)
 const saving = ref(false)
 
 const groups = ref<OfficeGroup[]>([])
+const kinds = ref<OfficeKind[]>([])
+// ว่าง = ชนิดตั้งต้นของระบบ (domain ที่สร้างก่อนมีตัวเลือกนี้)
+const kind = ref('')
 // 1 domain = 1 URL
 const originText = ref('')
 const hostApiBase = ref('')
@@ -42,9 +46,10 @@ const snippet = `<script src="${API_BASE}/widget/v1/ai-office.js" defer><\/scrip
 async function reload(keepService = true) {
   loadError.value = ''
   try {
-    const [res, g] = await Promise.all([listOffices(), listGroups()])
+    const [res, g, k] = await Promise.all([listOffices(), listGroups(), listKinds()])
     offices.value = res.data
     groups.value = g.data
+    kinds.value = k
     if (!office.value) {
       // ไม่มี office รหัสนี้ (ถูกลบไปแล้ว / พิมพ์ URL ผิด) — กลับหน้าภาพรวม
       router.replace('/offices')
@@ -62,6 +67,7 @@ function syncForm(keepService = true) {
   const o = office.value
   originText.value = o?.allowed_origins[0] ?? ''
   hostApiBase.value = o?.host_api_base ?? ''
+  kind.value = o?.kind || kinds.value.find((k) => k.default)?.kind || ''
   if (!keepService || !service.value) serviceId.value = o?.services[0]?.id ?? ''
 }
 
@@ -97,6 +103,15 @@ async function run(fn: () => Promise<Office | null>, okMsg: string): Promise<boo
   }
 }
 
+// สีหลักของ widget — ว่าง = สีตั้งต้นของ widget (DEFAULT_ACCENT) · ตัวเลือกสำเร็จรูปให้กดง่าย
+const DEFAULT_ACCENT = '#0f6e63'
+const ACCENT_PRESETS = ['#0f6e63', '#1e66f5', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#334155']
+const HEX = /^#[0-9a-f]{6}$/i
+const accentInvalid = computed(() => !!office.value?.accent_color && !HEX.test(office.value.accent_color))
+function setAccent(c: string) {
+  if (office.value) office.value.accent_color = c.toLowerCase()
+}
+
 // ตัวเลือก domain จัดหัวตามกลุ่ม · domain ที่ยังไม่มีกลุ่มอยู่ท้ายสุด
 const domainOptions = computed(() => {
   const out = groups.value.map((g) => ({ label: g.name, items: offices.value.filter((o) => o.group_id === g.id) }))
@@ -116,10 +131,12 @@ async function saveOffice() {
         enabled: o.enabled,
         is_hidden: o.is_hidden,
         theme: o.theme,
+        accent_color: (o.accent_color ?? '').trim(),
         placement: o.placement,
         allowed_origins: originText.value.trim() ? [originText.value.trim()] : [],
         ...(o.group_id ? { group_id: o.group_id } : {}),
         host_api_base: hostApiBase.value.trim(),
+        ...(kind.value ? { kind: kind.value } : {}),
       }),
     'บันทึก domain แล้ว',
   )
@@ -290,6 +307,15 @@ onMounted(() => reload(true))
             1 URL อยู่ได้แค่ domain เดียว · <code>www.</code> กับไม่มี <code>www.</code> นับเป็นคนละ URL (ต้องสร้างเป็น 2 domain)
           </div>
 
+          <label>ชนิดหลังบ้าน</label>
+          <a-select v-model:value="kind" placeholder="เลือกชนิดหลังบ้าน" style="width: 100%">
+            <a-select-option v-for="k in kinds" :key="k.kind" :value="k.kind">{{ k.label }} ({{ k.kind }})</a-select-option>
+          </a-select>
+          <div class="hint">
+            <strong>ต้องตรงกับหลังบ้านที่แปะ snippet</strong> — widget อ่านการล็อกอินและยิง API ตามชนิดนี้ ·
+            เลือกผิด = ปุ่มไม่โผล่ (อ่าน token ไม่เจอ)
+          </div>
+
           <label>URL API หลังบ้าน (ไม่บังคับ)</label>
           <a-input v-model:value="hostApiBase" placeholder="https://demo-dev-office.example.com/api" allow-clear />
           <div class="hint">
@@ -315,6 +341,33 @@ onMounted(() => reload(true))
             <a-radio-button value="light">สว่าง</a-radio-button>
             <a-radio-button value="dark">มืด</a-radio-button>
           </a-radio-group>
+
+          <label>สีหลักของ widget</label>
+          <div class="accent-row">
+            <button
+              v-for="c in ACCENT_PRESETS"
+              :key="c"
+              type="button"
+              class="swatch"
+              :class="{ on: (office.accent_color || DEFAULT_ACCENT) === c }"
+              :style="{ background: c }"
+              :aria-label="`ใช้สี ${c}`"
+              @click="setAccent(c)"
+            />
+            <input
+              type="color"
+              class="picker"
+              :value="HEX.test(office.accent_color || '') ? office.accent_color : DEFAULT_ACCENT"
+              aria-label="เลือกสีเอง"
+              @input="setAccent(($event.target as HTMLInputElement).value)"
+            />
+            <a-input v-model:value="office.accent_color" placeholder="#0f6e63" allow-clear style="width: 130px" :status="accentInvalid ? 'error' : ''" />
+            <a-button size="small" type="link" :disabled="!office.accent_color" @click="office.accent_color = ''">ใช้สีตั้งต้น</a-button>
+          </div>
+          <div class="hint">
+            ใช้กับปุ่มลอย หัวแชท และฟองข้อความของผู้ใช้ · สีตัวอักษรบนสีนี้ (ขาว/เข้ม) เลือกให้อัตโนมัติ ·
+            ว่าง = สีตั้งต้นของ widget<span v-if="accentInvalid" class="err"> — ต้องเป็นรหัส #rrggbb</span>
+          </div>
 
           <label>ตำแหน่งปุ่มลอย</label>
           <a-radio-group v-model:value="office.placement.position" button-style="solid">
@@ -426,6 +479,11 @@ onMounted(() => reload(true))
 label:not([class]) { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 4px; }
 .hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.65; }
 .sw { margin-left: 8px; font-size: 14px; }
+.accent-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
+.swatch.on { box-shadow: 0 0 0 2px var(--ink); }
+.picker { width: 34px; height: 30px; padding: 0 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.err { color: var(--danger, #c0392b); }
 .snippet { font-family: var(--font-mono); font-size: 11.5px; background: #16252b; color: #d9e6e2; padding: 14px; border-radius: 10px; overflow: auto; margin: 0; line-height: 1.6; }
 code { font-family: var(--font-mono); font-size: 11.5px; }
 

@@ -23,6 +23,8 @@ export interface Office {
   id: string
   label: string
   public_key: string
+  /** ชนิดหลังบ้าน = connector ที่ใช้ (GET /kinds) · ว่าง = ชนิดตั้งต้นของระบบ */
+  kind?: string
   allowed_origins: string[]
   /** URL API หลังบ้านที่ widget ของ office นี้ยิง · ว่าง = <โดเมนหน้าเว็บ>/api */
   host_api_base?: string
@@ -31,6 +33,8 @@ export interface Office {
   enabled: boolean
   is_hidden: boolean
   theme: ThemeMode
+  /** สีหลักของ widget #rrggbb · ว่าง = สีตั้งต้นของ widget */
+  accent_color?: string
   placement: Placement
   services: Service[]
   created_at: string
@@ -39,7 +43,7 @@ export interface Office {
 }
 
 export type OfficePatch = Partial<
-  Pick<Office, 'label' | 'allowed_origins' | 'host_api_base' | 'group_id' | 'enabled' | 'is_hidden' | 'theme' | 'placement'>
+  Pick<Office, 'label' | 'kind' | 'allowed_origins' | 'host_api_base' | 'group_id' | 'enabled' | 'is_hidden' | 'theme' | 'accent_color' | 'placement'>
 >
 
 export type ServicePatch = Partial<
