@@ -5,9 +5,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
   listOffices, listGroups, listKinds, patchOffice, deleteOffice,
-  addService, patchService, removeService,
-  type OfficeKind,
+  addService, patchService, removeService, listWidgetAssets,
+  type OfficeKind, type WidgetAssets,
 } from '@/services/api/offices'
+import LookPicker from '@/components/LookPicker.vue'
+import InfoTip from '@/components/InfoTip.vue'
 import { API_BASE } from '@/services/api/client'
 import WidgetPreview from '@/components/WidgetPreview.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -26,6 +28,8 @@ const saving = ref(false)
 
 const groups = ref<OfficeGroup[]>([])
 const kinds = ref<OfficeKind[]>([])
+// คลังรูปของ widget — โหลดไม่ได้ก็ยังใส่ลิงก์รูปเองได้
+const assets = ref<WidgetAssets>({ avatars: [], backgrounds: [], patterns: [], launchers: [] })
 // ว่าง = ชนิดตั้งต้นของระบบ (domain ที่สร้างก่อนมีตัวเลือกนี้)
 const kind = ref('')
 // 1 domain = 1 URL
@@ -50,6 +54,7 @@ async function reload(keepService = true) {
     offices.value = res.data
     groups.value = g.data
     kinds.value = k
+    listWidgetAssets().then((a) => (assets.value = a)).catch(() => {})
     if (!office.value) {
       // ไม่มี office รหัสนี้ (ถูกลบไปแล้ว / พิมพ์ URL ผิด) — กลับหน้าภาพรวม
       router.replace('/offices')
@@ -105,12 +110,43 @@ async function run(fn: () => Promise<Office | null>, okMsg: string): Promise<boo
 
 // สีหลักของ widget — ว่าง = สีตั้งต้นของ widget (DEFAULT_ACCENT) · ตัวเลือกสำเร็จรูปให้กดง่าย
 const DEFAULT_ACCENT = '#0f6e63'
-const ACCENT_PRESETS = ['#0f6e63', '#1e66f5', '#7c3aed', '#db2777', '#dc2626', '#ea580c', '#ca8a04', '#334155']
 const HEX = /^#[0-9a-f]{6}$/i
-const accentInvalid = computed(() => !!office.value?.accent_color && !HEX.test(office.value.accent_color))
-function setAccent(c: string) {
-  if (office.value) office.value.accent_color = c.toLowerCase()
+// เลือกสีเอง = ไล่สี 2–4 สีเท่านั้น · ชุดสำเร็จรูปแบบหัวแชทของเว็บผู้เล่น
+const GRADIENT_PRESETS: string[][] = [
+  ['#f5d76e', '#2563eb'], ['#7b2ff7', '#f107a3'], ['#06b6d4', '#2563eb'], ['#f59e0b', '#dc2626'],
+  ['#10b981', '#0f766e'], ['#ec4899', '#8b5cf6'], ['#1e293b', '#475569'],
+  ['#f5d76e', '#22c55e', '#2563eb'], ['#f97316', '#ec4899', '#8b5cf6'], ['#22d3ee', '#3b82f6', '#6366f1', '#a855f7'],
+]
+// domain เก่าที่ตั้งสีเดียวไว้ → เริ่มเป็นไล่สีเดียวกัน 2 จุด · ยังไม่ตั้งเลย → ชุดแรก
+const gradStops = computed<string[]>(() => {
+  const o = office.value
+  if (o?.accent_colors?.length) return o.accent_colors
+  if (o?.accent_color) return [o.accent_color, o.accent_color]
+  return GRADIENT_PRESETS[0]
+})
+const stopsInvalid = computed(() => gradStops.value.some((c) => !HEX.test(c)))
+const gradientCss = (stops: string[]) => `linear-gradient(110deg, ${stops.join(', ')})`
+function setStops(stops: string[]) {
+  if (office.value) office.value.accent_colors = stops.map((c) => c.toLowerCase())
 }
+function setStop(i: number, v: string) {
+  const next = [...gradStops.value]
+  next[i] = v.trim().toLowerCase()
+  setStops(next)
+}
+function addStop() {
+  const s = gradStops.value
+  if (s.length < 4) setStops([...s, s[s.length - 1]])
+}
+function removeStop(i: number) {
+  if (gradStops.value.length > 2) setStops(gradStops.value.filter((_, k) => k !== i))
+}
+function setColorSource(v: string) {
+  if (office.value) office.value.color_source = v
+}
+// ชนิดหลังบ้านที่เลือกอยู่มีสีของแบรนด์ให้อ่านไหม
+const siteColorsAvailable = computed(() => !!kinds.value.find((k) => k.kind === kind.value)?.site_colors)
+const useSiteColors = computed(() => siteColorsAvailable.value && office.value?.color_source === 'site')
 
 // ตัวเลือก domain จัดหัวตามกลุ่ม · domain ที่ยังไม่มีกลุ่มอยู่ท้ายสุด
 const domainOptions = computed(() => {
@@ -131,7 +167,10 @@ async function saveOffice() {
         enabled: o.enabled,
         is_hidden: o.is_hidden,
         theme: o.theme,
-        accent_color: (o.accent_color ?? '').trim(),
+        // ใช้สีของเว็บ = ไม่เก็บสีเอง · เลือกเอง = ไล่สี 2–4 สี (สีแรกเก็บใน accent_color ด้วย สำหรับ widget รุ่นเก่า)
+        ...(useSiteColors.value
+          ? { color_source: 'site', accent_colors: [], accent_color: '' }
+          : { color_source: '', accent_colors: gradStops.value, accent_color: gradStops.value[0] }),
         placement: o.placement,
         allowed_origins: originText.value.trim() ? [originText.value.trim()] : [],
         ...(o.group_id ? { group_id: o.group_id } : {}),
@@ -200,7 +239,11 @@ function saveService() {
         enabled: s.enabled,
         display_name: s.display_name,
         greeting: s.greeting,
-        avatar_url: s.avatar_url,
+        // ไม่ได้เลือก = สุ่มจากคลังรูป
+        avatar_url: s.avatar_url || 'random',
+        tagline: s.tagline ?? '',
+        background: s.background || 'random',
+        launcher_icon: s.launcher_icon ?? '',
       }),
     'บันทึก service แล้ว',
   )
@@ -342,32 +385,46 @@ onMounted(() => reload(true))
             <a-radio-button value="dark">มืด</a-radio-button>
           </a-radio-group>
 
-          <label>สีหลักของ widget</label>
-          <div class="accent-row">
-            <button
-              v-for="c in ACCENT_PRESETS"
-              :key="c"
-              type="button"
-              class="swatch"
-              :class="{ on: (office.accent_color || DEFAULT_ACCENT) === c }"
-              :style="{ background: c }"
-              :aria-label="`ใช้สี ${c}`"
-              @click="setAccent(c)"
-            />
-            <input
-              type="color"
-              class="picker"
-              :value="HEX.test(office.accent_color || '') ? office.accent_color : DEFAULT_ACCENT"
-              aria-label="เลือกสีเอง"
-              @input="setAccent(($event.target as HTMLInputElement).value)"
-            />
-            <a-input v-model:value="office.accent_color" placeholder="#0f6e63" allow-clear style="width: 130px" :status="accentInvalid ? 'error' : ''" />
-            <a-button size="small" type="link" :disabled="!office.accent_color" @click="office.accent_color = ''">ใช้สีตั้งต้น</a-button>
+          <label>สีของ widget<InfoTip text="ใช้กับปุ่มลอย หัวแชท ฟองข้อความของผู้ใช้ และปุ่มส่ง · สีตัวอักษรบนสี (ขาว/เข้ม) เลือกให้อัตโนมัติ" /></label>
+          <a-radio-group
+            v-if="siteColorsAvailable"
+            :value="useSiteColors ? 'site' : ''"
+            button-style="solid"
+            style="margin-bottom: 10px"
+            @update:value="(v: string) => setColorSource(v)"
+          >
+            <a-radio-button value="site">ใช้สีของเว็บ</a-radio-button>
+            <a-radio-button value="">เลือกเอง (ไล่สี)</a-radio-button>
+          </a-radio-group>
+
+          <div v-if="useSiteColors" class="hint">
+            widget อ่านสีของแบรนด์จากหน้าเว็บเอง — แต่ละแบรนด์ได้สีของตัวเองโดยไม่ต้องตั้ง · ถ้าอ่านไม่ได้จะใช้สีตั้งต้นของ widget ·
+            หน้าตัวอย่างด้านขวาแสดงสีตั้งต้น (คอนโซลอ่านสีของหน้าเว็บผู้เล่นไม่ได้)
           </div>
-          <div class="hint">
-            ใช้กับปุ่มลอย หัวแชท และฟองข้อความของผู้ใช้ · สีตัวอักษรบนสีนี้ (ขาว/เข้ม) เลือกให้อัตโนมัติ ·
-            ว่าง = สีตั้งต้นของ widget<span v-if="accentInvalid" class="err"> — ต้องเป็นรหัส #rrggbb</span>
-          </div>
+
+          <template v-else>
+            <div class="accent-row">
+              <button
+                v-for="g in GRADIENT_PRESETS"
+                :key="g.join()"
+                type="button"
+                class="swatch grad"
+                :class="{ on: gradStops.join() === g.join() }"
+                :style="{ background: gradientCss(g) }"
+                :aria-label="`ไล่สี ${g.join(' → ')}`"
+                @click="setStops([...g])"
+              />
+            </div>
+            <div class="grad-bar" :style="{ background: gradientCss(gradStops) }" />
+            <div v-for="(c, i) in gradStops" :key="i" class="stop-row">
+              <span class="stop-n">สี {{ i + 1 }}</span>
+              <input type="color" class="picker" :value="HEX.test(c) ? c : DEFAULT_ACCENT" :aria-label="`เลือกสีที่ ${i + 1}`" @input="setStop(i, ($event.target as HTMLInputElement).value)" />
+              <a-input :value="c" style="width: 130px" :status="HEX.test(c) ? '' : 'error'" @update:value="(v: string) => setStop(i, v)" />
+              <a-button v-if="gradStops.length > 2" size="small" type="link" danger @click="removeStop(i)">ลบ</a-button>
+            </div>
+            <a-button v-if="gradStops.length < 4" size="small" style="margin-top: 6px" @click="addStop">+ เพิ่มสี</a-button>
+            <div class="hint">ไล่สีอย่างน้อย 2 สี เพิ่มได้ถึง 4 สี<span v-if="stopsInvalid" class="err"> — ทุกสีต้องเป็นรหัส #rrggbb</span></div>
+          </template>
 
           <label>ตำแหน่งปุ่มลอย</label>
           <a-radio-group v-model:value="office.placement.position" button-style="solid">
@@ -414,8 +471,22 @@ onMounted(() => reload(true))
             <label>ชื่อที่ AI ใช้แสดง</label>
             <a-input v-model:value="service.display_name" />
 
-            <label>รูปประจำตัว (URL)</label>
-            <a-input v-model:value="service.avatar_url" placeholder="เว้นว่างได้ — จะขึ้นเป็นตัวอักษร AI" />
+            <label>ปุ่มเปิดแชท<InfoTip text="ฟองแชท 3D ลอยมุมจอ · ระบบย้อมสีตามสีของ widget (สีของเว็บ หรือสีที่เลือก) ให้เอง" /></label>
+            <LookPicker v-model="service.launcher_icon" :options="assets.launchers" shape="avatar" :random="false" tint :accent="gradStops[0]" />
+
+            <label>รูปผู้ช่วย<InfoTip text="ขึ้นบนหัวแชท · ตั้งรูป คำโปรย หรือพื้นหลังอย่างใดอย่างหนึ่ง หัวแชทจะเปลี่ยนเป็นแบบไล่สีตามสีหลัก" /></label>
+            <LookPicker v-model="service.avatar_url" :options="assets.avatars" shape="avatar" />
+
+            <label>คำโปรยใต้ชื่อ<InfoTip text="แสดงใต้ชื่อบนหัวแชท เช่น ผู้ช่วยดูแลลูกค้า · ตอบทันที 24 ชม. (ไม่เกิน 80 ตัวอักษร)" /></label>
+            <a-input v-model:value="service.tagline" :maxlength="80" allow-clear placeholder="เช่น ผู้ช่วยดูแลลูกค้า · ตอบทันที 24 ชม." />
+
+            <label>พื้นหลังห้องแชท<InfoTip text="ลายวาดตามสีหลักของ domain หรือรูปจากคลัง/ลิงก์ · ฟองข้อความมีพื้นของตัวเองจึงอ่านออกเสมอ" /></label>
+            <LookPicker
+              v-model="service.background"
+              :options="[...assets.patterns, ...assets.backgrounds]"
+              shape="background"
+              :accent="gradStops[0]"
+            />
 
             <label>คำทักทายแรก</label>
             <a-textarea v-model:value="service.greeting" :rows="3" />
@@ -441,7 +512,7 @@ onMounted(() => reload(true))
     </div>
 
     <!-- :key = office.id → สลับ office แล้ว preview re-mount ใหม่เอง ไม่ต้อง refresh -->
-    <WidgetPreview v-if="office" :key="office.id" :office="office" :service="service" />
+    <WidgetPreview v-if="office" :key="office.id" :office="office" :service="service" :assets="assets" />
   </div>
 
   <!-- เพิ่ม service -->
@@ -482,6 +553,10 @@ label:not([class]) { display: block; font-size: 12.5px; color: var(--muted); mar
 .accent-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
 .swatch.on { box-shadow: 0 0 0 2px var(--ink); }
+.swatch.grad { width: 34px; border-radius: 13px; }
+.grad-bar { height: 14px; border-radius: 7px; margin: 10px 0 8px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06); }
+.stop-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.stop-n { width: 34px; font-size: 12.5px; color: var(--muted); }
 .picker { width: 34px; height: 30px; padding: 0 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
 .err { color: var(--danger, #c0392b); }
 .snippet { font-family: var(--font-mono); font-size: 11.5px; background: #16252b; color: #d9e6e2; padding: 14px; border-radius: 10px; overflow: auto; margin: 0; line-height: 1.6; }

@@ -36,8 +36,19 @@ export interface OfficeKind {
   kind: string
   label: string
   default: boolean
+  /** หน้าเว็บชนิดนี้มีสีของแบรนด์ให้ widget อ่าน (เลือก "ใช้สีของเว็บ" ได้) */
+  site_colors?: boolean
 }
 export const listKinds = () => request<OfficeKind[]>('/api/ai/admin/kinds')
+
+/** คลังรูปของ widget (ไฟล์ใน ai-office-backend static/widget/assets) + ลายพื้นหลังที่ widget วาดเอง */
+export interface WidgetAssets {
+  avatars: string[]
+  backgrounds: string[]
+  patterns: string[]
+  launchers: string[]
+}
+export const listWidgetAssets = () => request<WidgetAssets>('/api/ai/admin/widget-assets')
 
 // ---- กลุ่มของ domain ----
 const groupsBase = '/api/ai/admin/groups'

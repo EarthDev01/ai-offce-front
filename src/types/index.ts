@@ -15,7 +15,14 @@ export interface Service {
   allowlist: string[]
   display_name: string
   greeting: string
+  /** รูปผู้ช่วย: '' | asset:<ไฟล์ในคลังรูป> | URL https */
   avatar_url: string
+  /** รูปปุ่มเปิดแชท (ฟองแชท 3D ย้อมสีตาม widget) asset:launchers/<ไฟล์> · ว่าง = รูปแรกในคลัง */
+  launcher_icon?: string
+  /** คำโปรยใต้ชื่อบนหัวแชท */
+  tagline?: string
+  /** พื้นหลังห้องแชท: '' | pattern:<id> | asset:<ไฟล์> | URL https */
+  background?: string
 }
 
 /** office = การติดตั้ง 1 ชุด · public_key ตัวนี้คือตัวที่อยู่ใน snippet */
@@ -35,6 +42,10 @@ export interface Office {
   theme: ThemeMode
   /** สีหลักของ widget #rrggbb · ว่าง = สีตั้งต้นของ widget */
   accent_color?: string
+  /** สีไล่ 2–4 สี (เลือกเอง) · ว่าง = ใช้สีของเว็บ / accent_color สีเดียว (domain เก่า) */
+  accent_colors?: string[]
+  /** '' = เลือกเอง · site = widget อ่านสีของแบรนด์จากหน้าเว็บ */
+  color_source?: string
   placement: Placement
   services: Service[]
   created_at: string
@@ -43,11 +54,11 @@ export interface Office {
 }
 
 export type OfficePatch = Partial<
-  Pick<Office, 'label' | 'kind' | 'allowed_origins' | 'host_api_base' | 'group_id' | 'enabled' | 'is_hidden' | 'theme' | 'accent_color' | 'placement'>
+  Pick<Office, 'label' | 'kind' | 'allowed_origins' | 'host_api_base' | 'group_id' | 'enabled' | 'is_hidden' | 'theme' | 'accent_color' | 'accent_colors' | 'color_source' | 'placement'>
 >
 
 export type ServicePatch = Partial<
-  Pick<Service, 'label' | 'enabled' | 'allowlist' | 'display_name' | 'greeting' | 'avatar_url'>
+  Pick<Service, 'label' | 'enabled' | 'allowlist' | 'display_name' | 'greeting' | 'avatar_url' | 'tagline' | 'background' | 'launcher_icon'>
 >
 
 export interface ApiResponse<T> {
