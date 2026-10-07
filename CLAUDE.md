@@ -23,6 +23,7 @@
 | คำอธิบายช่องกรอก | ไอคอน ! `components/InfoTip.vue` (ไม่เขียนข้อความยาวใต้ช่อง) |
 | รหัส 2FA | `components/PinInput.vue` |
 | การ์ดข้อมูลในแชท | `components/ChatCard.vue` |
+| เลือกรูป/พื้นหลังของ widget (คลังรูป + ลิงก์เอง) | `components/LookPicker.vue` |
 | กราฟ | `components/charts/*` + สีจาก `utils/chartPalette.ts` |
 | ไอคอนเมนู | `components/NavIcon.vue` |
 | หัวหน้า | `.page-head` (h1 + `.sub`) |

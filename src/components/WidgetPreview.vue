@@ -2,8 +2,15 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { API_BASE } from '@/services/api/client'
 import type { Office, Service } from '@/types'
+import type { WidgetAssets } from '@/services/api/offices'
 
-const props = defineProps<{ office: Office; service: Service | null }>()
+const props = defineProps<{ office: Office; service: Service | null; assets?: WidgetAssets }>()
+
+// "สุ่ม" — ของจริง server สุ่มตอน widget โหลด · หน้าตัวอย่างสุ่มเองจากคลังเดียวกัน (ทุกครั้งที่ค่าเปลี่ยน)
+function resolve(v: string | undefined, pool: string[]) {
+  if (v && v !== 'random') return v
+  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : ''
+}
 
 const SCRIPT_ID = 'ai-office-widget-preview'
 
@@ -20,11 +27,17 @@ function pushConfig() {
     // หน้าตาระดับ service
     display_name: props.service?.display_name ?? '',
     greeting: props.service?.greeting ?? '',
-    avatar_url: props.service?.avatar_url ?? '',
+    avatar_url: resolve(props.service?.avatar_url, props.assets?.avatars ?? []),
+    tagline: props.service?.tagline ?? '',
+    launcher_icon: props.service?.launcher_icon || props.assets?.launchers?.[0] || '',
+    background: resolve(props.service?.background, [...(props.assets?.patterns ?? []), ...(props.assets?.backgrounds ?? [])]),
     service_label: props.service?.label ?? '',
     // หน้าตาระดับ office (เหมือนกันทุก service เพราะเป็นหลังบ้านชุดเดียวกัน)
     theme: props.office.theme,
-    accent_color: props.office.accent_color ?? '',
+    accent_color: props.office.color_source === 'site' ? '' : props.office.accent_color ?? '',
+    // ใช้สีของเว็บ: คอนโซลอ่านสีหน้าเว็บผู้เล่นไม่ได้ → ตัวอย่างใช้สีตั้งต้น
+    accent_colors: props.office.color_source === 'site' ? [] : [...(props.office.accent_colors ?? [])],
+    color_source: '',
     placement: { position: p.position, offset_x: p.offset_x, offset_y: p.offset_y },
     is_hidden: props.office.is_hidden,
   }
@@ -49,7 +62,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => document.getElementById(SCRIPT_ID)?.remove())
 
-watch(() => [props.office, props.service], pushConfig, { deep: true })
+watch(() => [props.office, props.service, props.assets], pushConfig, { deep: true })
 </script>
 
 <template>
