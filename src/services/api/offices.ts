@@ -38,6 +38,21 @@ export interface OfficeKind {
   default: boolean
   /** หน้าเว็บชนิดนี้มีสีของแบรนด์ให้ widget อ่าน (เลือก "ใช้สีของเว็บ" ได้) */
   site_colors?: boolean
+  /** คำถามของชนิดนี้ + แบบการ์ดตั้งต้น (ใช้ทำตัวเลือก "แบบการ์ด") */
+  tools?: KindTool[]
+}
+
+/** แบบการ์ดในแชท — stat ตัวเลขเด่น · list รายการ · table ตาราง · single รายการเดียว */
+export type CardStyle = 'stat' | 'list' | 'table' | 'single'
+
+export interface KindTool {
+  name: string
+  /** ชื่อการ์ด */
+  title: string
+  /** แบบตั้งต้นจาก connector */
+  style: CardStyle
+  /** แบบที่การ์ดนี้วาดได้ */
+  styles: CardStyle[]
 }
 export const listKinds = () => request<OfficeKind[]>('/api/ai/admin/kinds')
 

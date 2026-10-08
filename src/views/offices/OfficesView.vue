@@ -6,7 +6,7 @@ import { message, Modal } from 'ant-design-vue'
 import {
   listOffices, listGroups, listKinds, patchOffice, deleteOffice,
   addService, patchService, removeService, listWidgetAssets,
-  type OfficeKind, type WidgetAssets,
+  type OfficeKind, type WidgetAssets, type CardStyle,
 } from '@/services/api/offices'
 import LookPicker from '@/components/LookPicker.vue'
 import InfoTip from '@/components/InfoTip.vue'
@@ -68,11 +68,17 @@ async function reload(keepService = true) {
   }
 }
 
+// ---- แบบการ์ดต่อคำถาม (ทับแบบตั้งต้นของ connector) · '' = ใช้แบบตั้งต้น ----
+const CARD_STYLE_LABEL: Record<CardStyle, string> = { stat: 'ตัวเลขเด่น', list: 'รายการ', table: 'ตาราง', single: 'รายการเดียว' }
+const cardStyles = ref<Record<string, string>>({})
+const kindTools = computed(() => kinds.value.find((k) => k.kind === kind.value)?.tools ?? [])
+
 function syncForm(keepService = true) {
   const o = office.value
   originText.value = o?.allowed_origins[0] ?? ''
   hostApiBase.value = o?.host_api_base ?? ''
   kind.value = o?.kind || kinds.value.find((k) => k.default)?.kind || ''
+  cardStyles.value = { ...(o?.card_styles ?? {}) }
   if (!keepService || !service.value) serviceId.value = o?.services[0]?.id ?? ''
 }
 
@@ -172,6 +178,12 @@ async function saveOffice() {
           ? { color_source: 'site', accent_colors: [], accent_color: '' }
           : { color_source: '', accent_colors: gradStops.value, accent_color: gradStops.value[0] }),
         placement: o.placement,
+        // ส่งทั้งชุด · เก็บเฉพาะคำถามของชนิดนี้ที่เลือกต่างจากค่าตั้งต้น
+        card_styles: Object.fromEntries(
+          kindTools.value
+            .filter((t) => cardStyles.value[t.name] && cardStyles.value[t.name] !== t.style)
+            .map((t) => [t.name, cardStyles.value[t.name]]),
+        ),
         allowed_origins: originText.value.trim() ? [originText.value.trim()] : [],
         ...(o.group_id ? { group_id: o.group_id } : {}),
         host_api_base: hostApiBase.value.trim(),
@@ -440,6 +452,25 @@ onMounted(() => reload(true))
             อยู่ระดับ domain เพราะทุก service เปิดในหน้าหลังบ้านเดียวกัน — ถ้าให้ต่างกันรายแบรนด์ ปุ่มจะเด้งไปมาตอนสลับ service
           </div>
 
+          <template v-if="kindTools.length">
+            <label>แบบการ์ดของแต่ละคำถาม<InfoTip text="ตัวเลขเด่น = ยอดรวม/จำนวนตัวใหญ่ · รายการ = แถวละรายการ สถานะเป็นป้ายสี · ตาราง = เทียบหลายคอลัมน์ · รายการเดียว = รายละเอียด 1 รายการ · ไม่เลือก = แบบที่ระบบแนะนำ" /></label>
+            <div class="style-grid">
+              <template v-for="t in kindTools" :key="t.name">
+                <span class="style-name" :title="t.name">{{ t.title }}</span>
+                <a-select
+                  :value="cardStyles[t.name] || ''"
+                  size="small"
+                  :aria-label="`แบบการ์ดของ ${t.title}`"
+                  @update:value="(v: string) => (cardStyles[t.name] = v)"
+                >
+                  <a-select-option value="">แนะนำ ({{ CARD_STYLE_LABEL[t.style] }})</a-select-option>
+                  <a-select-option v-for="st in t.styles" :key="st" :value="st">{{ CARD_STYLE_LABEL[st] }}</a-select-option>
+                </a-select>
+              </template>
+            </div>
+            <div class="hint">มีผลกับคำตอบถัดไปของทุก service ใน domain นี้ · ประวัติแชทเดิมยังแสดงแบบเดิม</div>
+          </template>
+
           <div class="row" style="margin-top: 14px">
             <a-button type="primary" :loading="saving" :disabled="!auth.can('office.edit')" @click="saveOffice">บันทึก domain</a-button>
             <a-button danger :disabled="!auth.can('office.delete')" @click="confirmDeleteOffice">ลบ domain</a-button>
@@ -583,4 +614,7 @@ code { font-family: var(--font-mono); font-size: 11.5px; }
 .empty h2 { font-size: 18px; }
 .empty p { margin: 0 0 16px; font-size: 13.5px; color: var(--muted); max-width: 34ch; }
 .loading-state { display: flex; justify-content: center; align-items: center; min-height: 320px; }
+.style-grid { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 6px 10px; align-items: center; }
+.style-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 560px) { .style-grid { grid-template-columns: minmax(0, 1fr); } }
 </style>

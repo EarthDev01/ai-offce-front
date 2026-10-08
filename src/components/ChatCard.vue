@@ -11,6 +11,8 @@ const KIND: Record<string, { label: string; color: string }> = {
   reference: { label: 'อ้างอิงเมนู', color: 'blue' },
 }
 
+const STYLE_LABEL: Record<string, string> = { stat: 'ตัวเลขเด่น', list: 'รายการ', table: 'ตาราง', single: 'รายการเดียว' }
+
 function fmt(v?: string) {
   return v ? new Date(v).toLocaleString('th-TH') : '—'
 }
@@ -23,6 +25,7 @@ function fmt(v?: string) {
       <strong>{{ card.title }}</strong>
       <a-tag :color="KIND[card.kind]?.color ?? 'default'">{{ KIND[card.kind]?.label ?? card.kind }}</a-tag>
       <span v-if="card.cached" class="hint">(cache)</span>
+      <span v-if="card.style && card.style !== 'table'" class="hint">· แบบ{{ STYLE_LABEL[card.style] }}</span>
     </div>
     <div v-if="card.fields?.length" class="fields">
       <template v-for="f in card.fields" :key="f.label">

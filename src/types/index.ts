@@ -44,6 +44,8 @@ export interface Office {
   accent_color?: string
   /** สีไล่ 2–4 สี (เลือกเอง) · ว่าง = ใช้สีของเว็บ / accent_color สีเดียว (domain เก่า) */
   accent_colors?: string[]
+  /** แบบการ์ดต่อคำถาม (ชื่อ tool → stat|list|table|single) ทับแบบตั้งต้นของ connector */
+  card_styles?: Record<string, string>
   /** '' = เลือกเอง · site = widget อ่านสีของแบรนด์จากหน้าเว็บ */
   color_source?: string
   placement: Placement
@@ -54,7 +56,7 @@ export interface Office {
 }
 
 export type OfficePatch = Partial<
-  Pick<Office, 'label' | 'kind' | 'allowed_origins' | 'host_api_base' | 'group_id' | 'enabled' | 'is_hidden' | 'theme' | 'accent_color' | 'accent_colors' | 'color_source' | 'placement'>
+  Pick<Office, 'label' | 'kind' | 'allowed_origins' | 'host_api_base' | 'group_id' | 'enabled' | 'is_hidden' | 'theme' | 'accent_color' | 'accent_colors' | 'color_source' | 'placement' | 'card_styles'>
 >
 
 export type ServicePatch = Partial<
@@ -75,6 +77,8 @@ export interface ChatCard {
   id: string
   kind: 'ok' | 'not_found' | 'error' | 'denied' | 'reference'
   tool: string
+  /** แบบที่ widget วาด (ไม่มี = table) */
+  style?: 'stat' | 'list' | 'table' | 'single'
   title: string
   fields: { label: string; display: string }[] | null
   table?: { columns: { label: string }[]; rows: { display: string }[][] }
